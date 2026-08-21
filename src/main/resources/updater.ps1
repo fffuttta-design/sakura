@@ -17,14 +17,53 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# --- 高DPI宣言（窓を作る前に必ずやる）---------------------------------------
-# 宣言しないと Windows が勝手に拡大表示して、文字がにじんだ窓になる。
-try {
-    Add-Type -Namespace SkrDpi -Name Api -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+# --- Windows API（高DPI宣言と、更新後にアプリを前面へ出すのに使う）-----------
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class SkrWin
+{
+    public delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc proc, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr hWnd, StringBuilder buf, int cch);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool altTab);
+    [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int pid);
+
+    // 指定プロセスが持つ「見えていて題名のある窓」を1つ返す（＝エディタの窓）
+    public static IntPtr FindMainWindow(int[] pids)
+    {
+        HashSet<uint> set = new HashSet<uint>();
+        foreach (int p in pids) { set.Add((uint)p); }
+
+        IntPtr found = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+        {
+            if (!IsWindowVisible(hWnd)) { return true; }
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+            if (!set.Contains(pid)) { return true; }
+            StringBuilder sb = new StringBuilder(256);
+            if (GetWindowTextW(hWnd, sb, 256) > 0) { found = hWnd; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+}
 '@
-    [SkrDpi.Api]::SetProcessDPIAware() | Out-Null
-} catch {}
+
+# 高DPI宣言は「窓を作る前」でないと効かない。
+# 宣言しないと Windows が勝手に拡大表示して、文字がにじんだ窓になる。
+try { [SkrWin]::SetProcessDPIAware() | Out-Null } catch {}
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -136,11 +175,44 @@ try {
         Set-Status $null ('{0} / {1}' -f $done, $files.Count)
     }
 
-    # --- 3. 起動し直す -------------------------------------------------------
+    # --- 3. 起動し直して、前面に出す -----------------------------------------
+    # 裏で立ち上がると「気づいたら更新されていた」になるので、必ず手前に持ってくる。
     Set-Status '起動しています...' ''
     Start-Sleep -Milliseconds 400
-    if (Test-Path $exe) { Start-Process $exe }
-    Start-Sleep -Milliseconds 800
+    if (Test-Path $exe) {
+        $proc = Start-Process $exe -PassThru
+
+        # 🔥 前面に出せるのは「いま前面を持っているプロセス」だけ。
+        #    この時点で前面はこの進捗窓なので、その権利を新しいアプリへ譲っておく。
+        try { [SkrWin]::AllowSetForegroundWindow($proc.Id) | Out-Null } catch {}
+
+        # エディタの窓が出るまで待つ（制御プロセスが別に立つので PID は決め打ちしない）
+        $hwnd = [IntPtr]::Zero
+        for ($i = 0; $i -lt 60; $i++) {
+            $pids = @(Get-Process -Name 'sakura' -ErrorAction SilentlyContinue |
+                      Where-Object { $_.Path -like "$DstDir*" } |
+                      ForEach-Object { $_.Id })
+            if ($pids.Count -gt 0) {
+                $hwnd = [SkrWin]::FindMainWindow([int[]]$pids)
+                if ($hwnd -ne [IntPtr]::Zero) { break }
+            }
+            Start-Sleep -Milliseconds 250
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+
+        if ($hwnd -ne [IntPtr]::Zero) {
+            # 進捗窓が最前面のままだとアプリを覆ってしまうので、先に降りる
+            $form.TopMost = $false
+            [System.Windows.Forms.Application]::DoEvents()
+
+            [SkrWin]::ShowWindow($hwnd, 9) | Out-Null        # SW_RESTORE（最小化されていても戻す）
+            [SkrWin]::BringWindowToTop($hwnd) | Out-Null
+            [SkrWin]::SetForegroundWindow($hwnd) | Out-Null
+            # SetForegroundWindow は OS に断られることがあるので、通りやすい方も併用する
+            [SkrWin]::SwitchToThisWindow($hwnd, $true)
+        }
+    }
+    Start-Sleep -Milliseconds 400
 }
 catch {
     Set-Status '更新に失敗しました' $_.Exception.Message
