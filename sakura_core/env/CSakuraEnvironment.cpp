@@ -24,6 +24,7 @@
 #include "recent/CMRUFolder.h"
 #include "util/string_ex2.h"
 #include "util/module.h" //GetAppVersionInfo
+#include "util/updater.h"	// 【自前改造】PLUS_VERSION_BASE
 #include "util/shell.h"
 #include "util/window.h"
 #include "config/system_constants.h"
@@ -422,12 +423,11 @@ void CSakuraEnvironment::ExpandParameter(const wchar_t* pszSource, wchar_t* pszB
 				//	2004.05.13 Moca バージョン番号は、プロセスごとに取得する
 				DWORD dwVersionMS, dwVersionLS;
 				GetAppVersionInfo( nullptr, VS_VERSION_INFO, &dwVersionMS, &dwVersionLS );
-				int len = auto_sprintf( buf, L"%d.%d.%d.%d",
-					HIWORD( dwVersionMS ),
-					LOWORD( dwVersionMS ),
-					HIWORD( dwVersionLS ),
-					LOWORD( dwVersionLS )
-				);
+				// 【自前改造】4桁は分かりにくいので「v6」のような短い表記にする。
+				//             本家の 2.4.4.7239 は バージョン情報 で見られる。
+				const int nBuild = LOWORD( dwVersionLS );
+				int len = auto_sprintf( buf, L"v%d",
+					( PLUS_VERSION_BASE < nBuild ) ? ( nBuild - PLUS_VERSION_BASE ) : nBuild );
 				q = wcs_pushW( q, q_max - q, buf, len );
 				++p;
 			}

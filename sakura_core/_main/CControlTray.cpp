@@ -99,17 +99,17 @@ static void CheckUpdateAndAsk( HWND hwnd )
 	s_cAskedVersion = res.m_cDist;
 
 	std::wstring strMsg;
-	strMsg += L"SakuraEditorPlus ";
-	strMsg += res.m_cDist.ToString();
-	strMsg += L" の準備ができました。\n";
-	strMsg += L"（今の版 ";
-	strMsg += res.m_cRunning.ToString();
+	strMsg += L"新しい版 ";
+	strMsg += res.m_cDist.ToShortString();
+	strMsg += L" があります。\n";
+	strMsg += L"（お使いの版は ";
+	strMsg += res.m_cRunning.ToShortString();
 	strMsg += L"）\n\n";
-	strMsg += L"今すぐ再起動して適用しますか？\n";
-	strMsg += L"編集中のファイルがあれば、先に保存してください。";
+	strMsg += L"今すぐ再起動して更新しますか？\n";
+	strMsg += L"編集中のファイルは先に保存してください。";
 
 	s_bAsking = true;
-	const int nRet = ::MessageBox( hwnd, strMsg.c_str(), L"アップデート準備完了",
+	const int nRet = ::MessageBox( hwnd, strMsg.c_str(), L"SakuraEditorPlus の更新",
 		MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND );
 	s_bAsking = false;
 

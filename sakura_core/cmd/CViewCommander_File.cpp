@@ -1113,37 +1113,35 @@ void CViewCommander::Command_CHECK_UPDATE( void )
 
 	const SUpdateCheckResult res = CheckUpdate();
 
-	std::wstring strMsg;
-	strMsg += L"現在の版\t: ";
-	strMsg += res.m_cRunning.ToString();
-	strMsg += L"\n";
-
 	if( !res.m_bDistFound ){
-		strMsg += L"配布されている版\t: 確認できません\n";
-		strMsg += L"\n";
-		strMsg += L"配布フォルダーが見つかりませんでした。\n";
+		std::wstring strMsg = L"お使いの版は ";
+		strMsg += res.m_cRunning.ToShortString();
+		strMsg += L" です。\n\n";
+		strMsg += L"最新版があるか確認できませんでした。\n";
 		strMsg += L"Google ドライブ（H:）が同期されているか確認してください。";
-		::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_OK | MB_ICONINFORMATION );
+		::MessageBox( hwndOwner, strMsg.c_str(), L"バージョン", MB_OK | MB_ICONINFORMATION );
 		return;
 	}
-
-	strMsg += L"配布されている版\t: ";
-	strMsg += res.m_cDist.ToString();
-	strMsg += L"\n";
-	strMsg += L"最終確認\t: ";
-	strMsg += GetLastUpdateCheckTime();
-	strMsg += L"\n\n";
 
 	if( !res.m_bAvailable ){
-		strMsg += L"最新です。";
-		::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_OK | MB_ICONINFORMATION );
+		std::wstring strMsg = L"お使いの版 ";
+		strMsg += res.m_cRunning.ToShortString();
+		strMsg += L" が最新です。\n\n";
+		strMsg += L"最終確認: ";
+		strMsg += GetLastUpdateCheckTime();
+		::MessageBox( hwndOwner, strMsg.c_str(), L"バージョン", MB_OK | MB_ICONINFORMATION );
 		return;
 	}
 
-	strMsg += L"新しい版があります。\n";
-	strMsg += L"今すぐ再起動して適用しますか？\n";
-	strMsg += L"（編集中のファイルは先に保存してください）";
-	if( IDYES != ::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_YESNO | MB_ICONQUESTION ) ){
+	std::wstring strMsg = L"新しい版 ";
+	strMsg += res.m_cDist.ToShortString();
+	strMsg += L" があります。\n";
+	strMsg += L"（お使いの版は ";
+	strMsg += res.m_cRunning.ToShortString();
+	strMsg += L"）\n\n";
+	strMsg += L"今すぐ再起動して更新しますか？\n";
+	strMsg += L"編集中のファイルは先に保存してください。";
+	if( IDYES != ::MessageBox( hwndOwner, strMsg.c_str(), L"バージョン", MB_YESNO | MB_ICONQUESTION ) ){
 		return;
 	}
 

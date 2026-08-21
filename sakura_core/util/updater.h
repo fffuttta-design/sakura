@@ -36,7 +36,18 @@ struct SAppVersion {
 		return m_nBuild > other.m_nBuild;
 	}
 	std::wstring ToString() const;
+
+	//! 本家の 2.4.4.7239 のような4桁は分かりにくいので、改良の回数だけを見せる
+	/*!
+		@return 「v6」のような短い文字列
+		@note 第4要素（Gitのコミット数）から、改造を始めた時点の値を引いた数。
+		      ＝「この改造版として何回目の版か」。本家の版は バージョン情報 で見られる。
+	*/
+	std::wstring ToShortString() const;
 };
+
+//! 改造を始めた時点のビルド番号。ここを起点に v1, v2 … と数える
+#define PLUS_VERSION_BASE 7233
 
 //! 配布フォルダー（...\SakuraEditorPlus\配布\app）を返す。無ければ空文字列
 std::wstring GetUpdateDistDir();
