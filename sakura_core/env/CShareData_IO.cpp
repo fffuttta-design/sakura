@@ -2105,14 +2105,27 @@ void CShareData_IO::ShareData_IO_MainMenu( CDataProfile& cProfile )
 	}
 
 	// ============================================================================
-	// 【自前改造】メニューバーに「ドキュメント」を足す（MY_MODS.md 参照）
+	// 【自前改造】設定を引き継いだ環境にも、この改造版の既定を1回だけ効かせる
 	//
-	//   既定メニュー(MainMenu.ini)は「設定がまだ無いとき」しか読まれない。
-	//   本家サクラエディタから設定を引き継ぐと 8個のメニューがそのまま入るので、
-	//   ここで足りなければ後ろに継ぎ足す。
-	//   一度足したら、本人がメニューから消しても勝手に復活しないよう
-	//   nDocumentMenuAdded を立てておく。
+	//   既定値(MainMenu.ini や CShareData::Init)は「設定がまだ無いとき」しか使われない。
+	//   本家サクラエディタから設定を引き継ぐと本家の状態がそのまま入るので、
+	//   ここで足りないぶんを継ぎ足す。
+	//   一度やったら nXxxApplied を立てておき、本人が元に戻したら勝手に触らない。
 	// ============================================================================
+
+	// ファンクションキー表示は既定でオフ（画面が狭くなるだけで使わない）
+	if( !cProfile.IsReadingMode() ){
+		int nHiddenOut = 1;
+		cProfile.IOProfileData( pszSecName, L"nFuncKeyHiddenApplied", nHiddenOut );
+	}else{
+		int nHidden = 0;
+		cProfile.IOProfileData( pszSecName, L"nFuncKeyHiddenApplied", nHidden );
+		if( 0 == nHidden ){
+			GetDllShareData().m_Common.m_sWindow.m_bDispFUNCKEYWND = FALSE;
+		}
+	}
+
+	// メニューバーに「ドキュメント」「バージョン」を足す
 	if( !cProfile.IsReadingMode() ){
 		// 書き出し時：一度でも出したことを記録しておく（本人が消したら復活させないため）
 		int nAddedOut = 1;
