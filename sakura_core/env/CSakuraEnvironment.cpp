@@ -423,11 +423,10 @@ void CSakuraEnvironment::ExpandParameter(const wchar_t* pszSource, wchar_t* pszB
 				//	2004.05.13 Moca バージョン番号は、プロセスごとに取得する
 				DWORD dwVersionMS, dwVersionLS;
 				GetAppVersionInfo( nullptr, VS_VERSION_INFO, &dwVersionMS, &dwVersionLS );
-				// 【自前改造】4桁は分かりにくいので「v6」のような短い表記にする。
-				//             本家の 2.4.4.7239 は バージョン情報 で見られる。
-				const int nBuild = LOWORD( dwVersionLS );
-				int len = auto_sprintf( buf, L"v%d",
-					( PLUS_VERSION_BASE < nBuild ) ? ( nBuild - PLUS_VERSION_BASE ) : nBuild );
+				// 【自前改造】4桁は分かりにくいので「v1.08」のような短い表記にする。
+				//             本家の 2.4.4.7241 は バージョン情報 で見られる。
+				const std::wstring strVer = MakePlusVersionString( LOWORD( dwVersionLS ) );
+				int len = auto_sprintf( buf, L"%ls", strVer.c_str() );
 				q = wcs_pushW( q, q_max - q, buf, len );
 				++p;
 			}

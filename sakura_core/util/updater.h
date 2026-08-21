@@ -37,17 +37,33 @@ struct SAppVersion {
 	}
 	std::wstring ToString() const;
 
-	//! 本家の 2.4.4.7239 のような4桁は分かりにくいので、改良の回数だけを見せる
+	//! 本家の 2.4.4.7239 のような4桁は分かりにくいので、短い表記にする
 	/*!
-		@return 「v6」のような短い文字列
-		@note 第4要素（Gitのコミット数）から、改造を始めた時点の値を引いた数。
-		      ＝「この改造版として何回目の版か」。本家の版は バージョン情報 で見られる。
+		@return 「v1.08」のような文字列
+		@see MakePlusVersionString
 	*/
 	std::wstring ToShortString() const;
 };
 
-//! 改造を始めた時点のビルド番号。ここを起点に v1, v2 … と数える
+//! 改造を始めた時点のビルド番号。ここを起点に 1.01, 1.02 … と数える
 #define PLUS_VERSION_BASE 7233
+
+//! ビルド番号から「v1.08」形式の版文字列を作る
+/*!
+	@param[in] nBuild ファイルバージョンの第4要素（＝Gitの累積コミット数）
+	@return 「v1.08」のような文字列
+
+	@note 改造を始めてから何回目の版かを ◯.◯◯ で見せる。
+	      100回ごとに上の桁が繰り上がる（v1.99 の次は v2.00）。
+	      タイトルバー・更新ダイアログ・テストの3か所で同じ計算をするので、ここに集約する。
+*/
+inline std::wstring MakePlusVersionString( int nBuild )
+{
+	const int nRev = ( PLUS_VERSION_BASE < nBuild ) ? ( nBuild - PLUS_VERSION_BASE ) : nBuild;
+	WCHAR szBuf[32];
+	::_snwprintf_s( szBuf, _countof(szBuf), _TRUNCATE, L"v%d.%02d", 1 + nRev / 100, nRev % 100 );
+	return szBuf;
+}
 
 //! 配布フォルダー（...\SakuraEditorPlus\配布\app）を返す。無ければ空文字列
 std::wstring GetUpdateDistDir();

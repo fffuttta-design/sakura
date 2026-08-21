@@ -67,14 +67,7 @@ std::wstring SAppVersion::ToString() const
 
 std::wstring SAppVersion::ToShortString() const
 {
-	WCHAR szBuf[32];
-	if( PLUS_VERSION_BASE < m_nBuild ){
-		::auto_sprintf_s( szBuf, _countof(szBuf), L"v%d", m_nBuild - PLUS_VERSION_BASE );
-	}else{
-		// 起点より前（＝改造前のもの）は、そのままビルド番号を見せる
-		::auto_sprintf_s( szBuf, _countof(szBuf), L"v%d", m_nBuild );
-	}
-	return szBuf;
+	return MakePlusVersionString( m_nBuild );
 }
 
 std::wstring GetUpdateDistDir()

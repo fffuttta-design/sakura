@@ -36,12 +36,9 @@ std::filesystem::path GetTempFilePathWithExt(std::wstring_view prefix, std::wstr
 
 namespace env {
 
-// 【自前改造】$V は「2.4.4.7240」ではなく「v7」のような短い表記を返すようにした。
-//             （PLUS_VERSION_BASE を引いた＝改造版として何回目か。util/updater.h 参照）
-const std::wstring versionStr{
-	L"v" + std::to_wstring( ( PLUS_VERSION_BASE < BUILD_VERSION )
-		? ( BUILD_VERSION - PLUS_VERSION_BASE )
-		: BUILD_VERSION ) };
+// 【自前改造】$V は「2.4.4.7241」ではなく「v1.08」のような短い表記を返すようにした。
+//             （計算は util/updater.h の MakePlusVersionString に集約してある）
+const std::wstring versionStr{ MakePlusVersionString( BUILD_VERSION ) };
 
 /*!
  * @brief 期待値を表す構造体
