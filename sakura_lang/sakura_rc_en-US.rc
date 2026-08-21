@@ -2323,6 +2323,9 @@ BEGIN
     F_FILE_REOPEN_CESU8     "Re-Open as CESU-8"
     F_FILE_REOPEN           "Re-Open"
     F_FILESAVEALL           "Save all"
+    F_QUICK_STASH           "Quick stash"
+    F_QUICK_STASH_OPEN      "Open stash..."
+    F_CHECK_UPDATE          "Check for updates..."
     F_FILE_REOPEN_LATIN1    "Re-Open as Latin1"
 END
 

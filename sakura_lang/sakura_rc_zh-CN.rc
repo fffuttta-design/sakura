@@ -2240,6 +2240,9 @@ BEGIN
     F_FILE_REOPEN_CESU8     "以CESU-8重新打开"
     F_FILE_REOPEN           "重新打开"
     F_FILESAVEALL           "全部保存"
+    F_QUICK_STASH           "快速暂存"
+    F_QUICK_STASH_OPEN      "打开暂存..."
+    F_CHECK_UPDATE          "检查更新..."
     F_FILE_REOPEN_LATIN1    "以Latin1重新打开"
 END
 

@@ -808,6 +808,7 @@
     <ClCompile Include="..\sakura_core\uiparts\CWaitCursor.cpp" />
     <ClCompile Include="..\sakura_core\util\file.cpp" />
     <ClCompile Include="..\sakura_core\util\quickstash.cpp" />
+    <ClCompile Include="..\sakura_core\util\updater.cpp" />
     <ClCompile Include="..\sakura_core\util\format.cpp" />
     <ClCompile Include="..\sakura_core\util\input.cpp" />
     <ClCompile Include="..\sakura_core\util\MessageBoxF.cpp" />

@@ -57,14 +57,73 @@
 #include "config/system_constants.h"
 #include "config/app_constants.h"
 #include "apiwrap/DarkMode.h"
+#include "util/updater.h"		// 【自前改造】自動更新
 
 #define ID_HOTKEY_TRAYMENU	0x1234
 
 #define IDT_EDITCHECK 2
 // 3秒
 #define IDT_EDITCHECK_INTERVAL 3000
+
+// 【自前改造】自動更新（アプリ共通仕様.md 第4部：起動3秒後 ＋ 以降3分ごと）
+#define IDT_UPDATECHECK_FIRST			3
+#define IDT_UPDATECHECK_FIRST_DELAY		3000
+#define IDT_UPDATECHECK					4
+#define IDT_UPDATECHECK_INTERVAL		(3 * 60 * 1000)
 /////////////////////////////////////////////////////////////////////////
 static LRESULT CALLBACK CControlTrayWndProc( HWND, UINT, WPARAM, LPARAM );
+
+/*!
+	【自前改造】更新を確認して、あれば聞く
+
+	アプリ共通仕様.md 第4部「落ちてきたら聞く」に相当。
+	同じ版で何度も聞かないよう、一度断られた版は覚えておく。
+	編集中でも困らないよう、聞くだけで勝手には適用しない。
+*/
+static void CheckUpdateAndAsk( HWND hwnd )
+{
+	static SAppVersion s_cAskedVersion;		// 一度聞いた版（同じ版では二度聞かない）
+	static bool        s_bAsking = false;	// 問い合わせ中に次のタイマーが重ならないように
+
+	if( s_bAsking ){
+		return;
+	}
+
+	const SUpdateCheckResult res = CheckUpdate();
+	if( !res.m_bAvailable ){
+		return;
+	}
+	if( s_cAskedVersion.IsValid() && !( res.m_cDist > s_cAskedVersion ) ){
+		return;	// この版はもう聞いた
+	}
+	s_cAskedVersion = res.m_cDist;
+
+	std::wstring strMsg;
+	strMsg += L"SakuraEditorPlus ";
+	strMsg += res.m_cDist.ToString();
+	strMsg += L" の準備ができました。\n";
+	strMsg += L"（今の版 ";
+	strMsg += res.m_cRunning.ToString();
+	strMsg += L"）\n\n";
+	strMsg += L"今すぐ再起動して適用しますか？\n";
+	strMsg += L"編集中のファイルがあれば、先に保存してください。";
+
+	s_bAsking = true;
+	const int nRet = ::MessageBox( hwnd, strMsg.c_str(), L"アップデート準備完了",
+		MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND );
+	s_bAsking = false;
+
+	if( IDYES != nRet ){
+		return;	// 「後で」。次に新しい版が出るまでは聞かない
+	}
+
+	if( !StartUpdate() ){
+		::MessageBox( hwnd, L"更新を開始できませんでした。", L"アップデート", MB_OK | MB_ICONWARNING );
+		return;
+	}
+	// 更新スクリプトが全プロセスの終了を待っている。制御プロセスも含めて全部閉じる
+	CControlTray::TerminateApplication( hwnd );
+}
 
 std::vector<std::wstring_view> SplitLegacyCommandLine(std::wstring_view s);
 
@@ -646,6 +705,15 @@ LRESULT CControlTray::DispatchEvent(
 				PostMessageAny( hwnd, MYWM_DELETE_ME, 0, 0 );
 			}
 		}
+		// 【自前改造】自動更新の確認
+		else if( IDT_UPDATECHECK_FIRST == wParam || IDT_UPDATECHECK == wParam ){
+			if( IDT_UPDATECHECK_FIRST == wParam ){
+				// 起動3秒後の1回きり。以降は3分ごとに切り替える
+				::KillTimer( hwnd, IDT_UPDATECHECK_FIRST );
+				::SetTimer( hwnd, IDT_UPDATECHECK, IDT_UPDATECHECK_INTERVAL, nullptr );
+			}
+			CheckUpdateAndAsk( hwnd );
+		}
 		return 0;
 
 	case MYWM_UIPI_CHECK:
@@ -757,6 +825,8 @@ LRESULT CControlTray::DispatchEvent(
 
 		// 2010.08.26 ウィンドウ存在確認
 		::SetTimer( hwnd, IDT_EDITCHECK, IDT_EDITCHECK_INTERVAL, nullptr );
+		// 【自前改造】自動更新：まず起動3秒後に1回。そのあと3分ごとに切り替わる
+		::SetTimer( hwnd, IDT_UPDATECHECK_FIRST, IDT_UPDATECHECK_FIRST_DELAY, nullptr );
 		return 0L;
 
 //	case WM_QUERYENDSESSION:

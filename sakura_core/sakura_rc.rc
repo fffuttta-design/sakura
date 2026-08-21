@@ -2270,6 +2270,7 @@ BEGIN
     F_FILE_REOPEN_LATIN1    "Latin1で開き直す"
     F_QUICK_STASH           "クイック退避"
     F_QUICK_STASH_OPEN      "退避を開く..."
+    F_CHECK_UPDATE          "今すぐ最新版を確認..."
 END
 
 STRINGTABLE

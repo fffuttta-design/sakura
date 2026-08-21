@@ -85,6 +85,7 @@ public:
 	// 【自前改造】クイック退避（MY_MODS.md 参照）
 	bool Command_QUICK_STASH( void );					/* クイック退避：名前も場所も聞かずにDriveへ保存 */
 	void Command_QUICK_STASH_OPEN( void );				/* 退避フォルダーを開く */
+	void Command_CHECK_UPDATE( void );					/* 今すぐ最新版を確認 */
 	void Command_FILECLOSE( void );						/* 開じて(無題) */	//Oct. 17, 2000 jepro 「ファイルを閉じる」というキャプションを変更
 	/* 閉じて開く*/
 	// Mar. 30, 2003 genta 引数追加

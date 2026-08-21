@@ -32,6 +32,7 @@
 #include "io/CFileLoad.h"
 #include "io/CTextStream.h"	// 【自前改造】クイック退避で使う
 #include "util/quickstash.h"	// 【自前改造】退避フォルダーの決定（メニュー側と共用）
+#include "util/updater.h"	// 【自前改造】自動更新／手動更新
 #include "env/CWriteManager.h"
 #include "CEditApp.h"
 #include "recent/CMRUFile.h"
@@ -1097,4 +1098,59 @@ void CViewCommander::Command_QUICK_STASH_OPEN( void )
 	// 末尾に \ を付けてフォルダーとして渡す
 	const std::wstring strDirArg = strDir + L"\\";
 	Command_FILEOPEN( nullptr, CODE_AUTODETECT, false, strDirArg.c_str() );
+}
+
+/*! 今すぐ最新版を確認
+
+	共通仕様（C:\dev\アプリ共通仕様.md 第3部）の「設定画面に置く更新の行」に相当する。
+	版・配布されている版・最終確認日時をまとめて見せ、新しければその場で適用できる。
+
+	@date 2026/08/21 【自前改造】新規作成
+*/
+void CViewCommander::Command_CHECK_UPDATE( void )
+{
+	const HWND hwndOwner = CEditWnd::getInstance()->GetHwnd();
+
+	const SUpdateCheckResult res = CheckUpdate();
+
+	std::wstring strMsg;
+	strMsg += L"現在の版\t: ";
+	strMsg += res.m_cRunning.ToString();
+	strMsg += L"\n";
+
+	if( !res.m_bDistFound ){
+		strMsg += L"配布されている版\t: 確認できません\n";
+		strMsg += L"\n";
+		strMsg += L"配布フォルダーが見つかりませんでした。\n";
+		strMsg += L"Google ドライブ（H:）が同期されているか確認してください。";
+		::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_OK | MB_ICONINFORMATION );
+		return;
+	}
+
+	strMsg += L"配布されている版\t: ";
+	strMsg += res.m_cDist.ToString();
+	strMsg += L"\n";
+	strMsg += L"最終確認\t: ";
+	strMsg += GetLastUpdateCheckTime();
+	strMsg += L"\n\n";
+
+	if( !res.m_bAvailable ){
+		strMsg += L"最新です。";
+		::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_OK | MB_ICONINFORMATION );
+		return;
+	}
+
+	strMsg += L"新しい版があります。\n";
+	strMsg += L"今すぐ再起動して適用しますか？\n";
+	strMsg += L"（編集中のファイルは先に保存してください）";
+	if( IDYES != ::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_YESNO | MB_ICONQUESTION ) ){
+		return;
+	}
+
+	if( !StartUpdate() ){
+		::MessageBox( hwndOwner, L"更新を開始できませんでした。", L"更新の確認", MB_OK | MB_ICONWARNING );
+		return;
+	}
+	// 更新スクリプトが全プロセスの終了を待っているので、速やかに全部閉じる
+	HandleCommand( F_EXITALL, true, 0, 0, 0, 0 );
 }
