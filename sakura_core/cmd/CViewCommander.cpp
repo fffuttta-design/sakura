@@ -192,6 +192,9 @@ BOOL CViewCommander::HandleCommand(
 	case F_FILESAVEAS:			bRet = Command_FILESAVEAS((const WCHAR*)lparam1,(EEolType)lparam3);break;	/* 名前を付けて保存 */
 	case F_FILESAVEALL:			bRet = Command_FILESAVEALL();break;	/* 全ての編集ウィンドウで上書き保存 */ // Jan. 23, 2005 genta
 	case F_FILESAVE_QUIET:		bRet = Command_FILESAVE(false,false); break;	/* 静かに上書き保存 */ // Jan. 24, 2005 genta
+	// 【自前改造】クイック退避
+	case F_QUICK_STASH:			bRet = Command_QUICK_STASH(); break;	/* クイック退避 */
+	case F_QUICK_STASH_OPEN:	Command_QUICK_STASH_OPEN(); break;		/* 退避を開く */
 	case F_FILESAVECLOSE:
 		//	Feb. 28, 2004 genta 保存＆閉じる
 		//	保存が不要なら単に閉じる

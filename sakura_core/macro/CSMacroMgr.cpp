@@ -52,6 +52,9 @@ MacroFuncInfo CSMacroMgr::m_MacroFuncInfoCommandArr[] =
 	{F_FILEOPEN2,					L"FileOpen",				{VT_BSTR,  VT_I4,    VT_I4,    VT_BSTR},	VT_EMPTY,	nullptr}, //開く2
 	{F_FILESAVE,					L"FileSave",				{VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY},	VT_EMPTY,	nullptr}, //上書き保存
 	{F_FILESAVEALL,					L"FileSaveAll",			{VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY},	VT_EMPTY,	nullptr}, //上書き保存
+	// 【自前改造】クイック退避
+	{F_QUICK_STASH,					L"QuickStash",			{VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY},	VT_EMPTY,	nullptr}, //クイック退避
+	{F_QUICK_STASH_OPEN,			L"QuickStashOpen",		{VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY},	VT_EMPTY,	nullptr}, //退避を開く
 	{F_FILESAVEAS_DIALOG,			L"FileSaveAsDialog",		{VT_BSTR,  VT_I4,    VT_I4,    VT_EMPTY},	VT_EMPTY,	nullptr}, //名前を付けて保存(ダイアログ) 2013.05.02
 	{F_FILESAVEAS,					L"FileSaveAs",			{VT_BSTR,  VT_I4,    VT_I4,    VT_EMPTY},	VT_EMPTY,	nullptr}, //名前を付けて保存
 	{F_FILECLOSE,					L"FileClose",				{VT_EMPTY, VT_EMPTY, VT_EMPTY, VT_EMPTY},	VT_EMPTY,	nullptr}, //閉じて(無題)	//Oct. 17, 2000 jepro 「ファイルを閉じる」というキャプションを変更
