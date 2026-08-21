@@ -182,66 +182,39 @@ bool StartUpdate()
 	}
 	const std::wstring strSelf = GetSelfDir();
 
-	// 更新スクリプトを一時フォルダーに書き出す
 	WCHAR szTemp[_MAX_PATH];
 	szTemp[0] = L'\0';
 	if( 0 == ::GetTempPath( _countof(szTemp), szTemp ) ){
 		return false;
 	}
-	std::wstring strBat = szTemp;
-	strBat += L"SakuraEditorPlus-update.bat";
 
-	// 動いている exe は上書きできないので、コピーできるまで1秒おきに再試行する。
-	// 全プロセスが終われば通る。60回（約1分）で諦める。
-	std::wstring strScript;
-	strScript += L"@echo off\r\n";
-	strScript += L"chcp 65001 > nul\r\n";
-	strScript += L"setlocal\r\n";
-	strScript += L"set SRC=" + strDist + L"\r\n";
-	strScript += L"set DST=" + strSelf + L"\r\n";
-	strScript += L"set N=0\r\n";
-	strScript += L":retry\r\n";
-	strScript += L"set /a N+=1\r\n";
-	strScript += L"if %N% GTR 60 goto giveup\r\n";
-	// /XF で設定ファイルを除外（引き継いだ設定を消さない）
-	strScript += L"robocopy \"%SRC%\" \"%DST%\" /E /R:0 /W:0 /NJH /NJS /NP /NFL /NDL "
-	             L"/XF sakura.ini sakura.ini.* update-check.txt > nul\r\n";
-	strScript += L"if errorlevel 8 (\r\n";
-	strScript += L"  ping -n 2 127.0.0.1 > nul\r\n";
-	strScript += L"  goto retry\r\n";
-	strScript += L")\r\n";
-	strScript += L"start \"\" \"%DST%\\sakura.exe\"\r\n";
-	strScript += L"goto done\r\n";
-	strScript += L":giveup\r\n";
-	strScript += L"start \"\" \"%DST%\\sakura.exe\"\r\n";
-	strScript += L":done\r\n";
-	strScript += L"del \"%~f0\" > nul 2>&1\r\n";
-
-	// バッチは UTF-8(BOM無し) ＋ chcp 65001 で日本語パスを通す
-	const int nUtf8Len = ::WideCharToMultiByte( CP_UTF8, 0, strScript.c_str(), (int)strScript.length(), nullptr, 0, nullptr, nullptr );
-	if( nUtf8Len <= 0 ){
-		return false;
+	// 更新の実体は同梱の updater.ps1（「更新しています」の窓と進捗バーを出す）。
+	// 自分自身も更新対象なので、一時フォルダーへ写してからそちらを動かす。
+	// （導入先で直接動かすと、自分を上書きしようとして失敗する）
+	const std::wstring strSrcScript = strSelf + L"\\updater.ps1";
+	if( !fexist( strSrcScript.c_str() ) ){
+		return false;	// 同梱漏れ。呼び出し側でメッセージを出す
 	}
-	std::vector<char> vUtf8( nUtf8Len );
-	::WideCharToMultiByte( CP_UTF8, 0, strScript.c_str(), (int)strScript.length(), vUtf8.data(), nUtf8Len, nullptr, nullptr );
-
-	const HANDLE hFile = ::CreateFile( strBat.c_str(), GENERIC_WRITE, 0, nullptr,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
-	if( INVALID_HANDLE_VALUE == hFile ){
-		return false;
-	}
-	DWORD dwWritten = 0;
-	const BOOL bWrote = ::WriteFile( hFile, vUtf8.data(), (DWORD)nUtf8Len, &dwWritten, nullptr );
-	::CloseHandle( hFile );
-	if( !bWrote ){
+	std::wstring strRunScript = szTemp;
+	strRunScript += L"SakuraEditorPlus-update.ps1";
+	if( !::CopyFile( strSrcScript.c_str(), strRunScript.c_str(), FALSE ) ){
 		return false;
 	}
 
-	// 画面を出さずに実行する
-	std::wstring strCmd = L"cmd.exe /c \"" + strBat + L"\"";
+	// 引数のパスは空白を含むので必ず引用符で囲む
+	std::wstring strCmd;
+	strCmd += L"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"";
+	strCmd += strRunScript;
+	strCmd += L"\" -SrcDir \"";
+	strCmd += strDist;
+	strCmd += L"\" -DstDir \"";
+	strCmd += strSelf;
+	strCmd += L"\"";
+
 	std::vector<WCHAR> vCmd( strCmd.begin(), strCmd.end() );
 	vCmd.push_back( L'\0' );
 
+	// コンソールは出さない（進捗はスクリプト側の窓で見せる）
 	STARTUPINFO si = { sizeof(si) };
 	si.dwFlags     = STARTF_USESHOWWINDOW;
 	si.wShowWindow = SW_HIDE;
