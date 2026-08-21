@@ -46,6 +46,8 @@ FA_NONRECORD		 = 0x00040000,	//!< マクロへの記録を抑制する
 IDM_SELWINDOW				= 10000,
 IDM_SELMRU					= 11000,
 IDM_SELOPENFOLDER			= 12000,
+IDM_SELSTASH				= 13000,	//【自前改造】ドキュメント（退避）一覧の項目
+MAX_STASH_MENU				= 50,		//【自前改造】ドキュメントメニューに出す最大件数
 
 F_PLUGCOMMAND_FIRST			= 20000,
 F_PLUGCOMMAND_LAST			= 21999,
@@ -57,8 +59,9 @@ F_FOLDER_USED_RECENTLY		= 29003,	// 最近使ったフォルダー
 F_CUSTMENU_LIST				= 29004,	// カスタムメニューリスト
 F_USERMACRO_LIST			= 29005,	// 登録済みマクロリスト
 F_PLUGIN_LIST				= 29006,	// プラグインコマンドリスト
+F_STASH_LIST				= 29007,	//【自前改造】ドキュメント（退避したもの）の一覧
 F_SPECIAL_FIRST				= F_WINDOW_LIST,
-F_SPECIAL_LAST				= F_PLUGIN_LIST,
+F_SPECIAL_LAST				= F_STASH_LIST,
 
 F_MENU_FIRST				= 30000,
 

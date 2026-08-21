@@ -31,6 +31,7 @@
 #include "io/CBinaryStream.h"
 #include "io/CFileLoad.h"
 #include "io/CTextStream.h"	// 【自前改造】クイック退避で使う
+#include "util/quickstash.h"	// 【自前改造】退避フォルダーの決定（メニュー側と共用）
 #include "env/CWriteManager.h"
 #include "CEditApp.h"
 #include "recent/CMRUFile.h"
@@ -56,53 +57,7 @@
 
 namespace {
 
-//! 退避フォルダーのパスを決めて、無ければ作る
-/*!
-	@return 退避フォルダーのフルパス。用意できなかったときは空文字列
-	@note ドライブレターを決め打ちすると Drive 未マウント時に黙って死ぬので、
-	      見つからなければユーザーフォルダーへ逃がす
-*/
-std::wstring GetQuickStashDir()
-{
-	// 候補1: Google ドライブ（H: = contact@run-strategy.jp を優先。次に G: 個人、I: 家族）
-	static const WCHAR* const ppszDriveCandidates[] = { L"H:", L"G:", L"I:" };
-	static const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"SakuraEditorPlus", L"退避" };
-
-	for( const WCHAR* pszDrive : ppszDriveCandidates ){
-		std::wstring strPath = pszDrive;
-		strPath += L"\\";
-		strPath += ppszSubDirs[0];
-		if( !IsDirectory( strPath.c_str() ) ){
-			continue;	// このドライブはマウントされていない
-		}
-		// マイドライブの下を順に掘る（無ければ作る）
-		bool bOk = true;
-		for( size_t i = 1; i < _countof(ppszSubDirs); ++i ){
-			strPath += L"\\";
-			strPath += ppszSubDirs[i];
-			if( !IsDirectory( strPath.c_str() ) && !::CreateDirectory( strPath.c_str(), nullptr ) ){
-				bOk = false;
-				break;
-			}
-		}
-		if( bOk ){
-			return strPath;
-		}
-	}
-
-	// 候補2: ユーザーフォルダー（Drive が無い端末でも動くように）
-	WCHAR szProfile[_MAX_PATH];
-	szProfile[0] = L'\0';
-	if( 0 < ::GetEnvironmentVariable( L"USERPROFILE", szProfile, _countof(szProfile) ) ){
-		std::wstring strPath = szProfile;
-		strPath += L"\\SakuraEditorPlus退避";
-		if( IsDirectory( strPath.c_str() ) || ::CreateDirectory( strPath.c_str(), nullptr ) ){
-			return strPath;
-		}
-	}
-
-	return std::wstring();
-}
+// GetQuickStashDir() は util/quickstash.h（メニュー側と共用）
 
 //! 先頭の中身のある行から、ファイル名に使える短い見出しを作る
 /*!

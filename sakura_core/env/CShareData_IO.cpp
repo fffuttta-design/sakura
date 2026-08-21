@@ -2103,6 +2103,68 @@ void CShareData_IO::ShareData_IO_MainMenu( CDataProfile& cProfile )
 			}
 		}
 	}
+
+	// ============================================================================
+	// 【自前改造】メニューバーに「ドキュメント」を足す（MY_MODS.md 参照）
+	//
+	//   既定メニュー(MainMenu.ini)は「設定がまだ無いとき」しか読まれない。
+	//   本家サクラエディタから設定を引き継ぐと 8個のメニューがそのまま入るので、
+	//   ここで足りなければ後ろに継ぎ足す。
+	//   一度足したら、本人がメニューから消しても勝手に復活しないよう
+	//   nDocumentMenuAdded を立てておく。
+	// ============================================================================
+	if( !cProfile.IsReadingMode() ){
+		// 書き出し時：一度でも出したことを記録しておく（本人が消したら復活させないため）
+		int nAddedOut = 1;
+		cProfile.IOProfileData( pszSecName, L"nDocumentMenuAdded", nAddedOut );
+	}else{
+		CommonSetting_MainMenu& mainmenu = GetDllShareData().m_Common.m_sMainMenu;
+
+		int nAdded = 0;
+		cProfile.IOProfileData( pszSecName, L"nDocumentMenuAdded", nAdded );
+
+		bool bExist = false;
+		for( int i = 0; i < mainmenu.m_nMainMenuNum; i++ ){
+			if( mainmenu.m_cMainMenuTbl[i].m_nFunc == F_STASH_LIST ){
+				bExist = true;
+				break;
+			}
+		}
+
+		if( !bExist && 0 == nAdded
+		 && mainmenu.m_nMainMenuNum + 2 <= int(std::size(mainmenu.m_cMainMenuTbl)) ){
+			// 見出し（トップレベル）
+			CMainMenu* pcTop = &mainmenu.m_cMainMenuTbl[mainmenu.m_nMainMenuNum];
+			pcTop->m_nType    = T_NODE;
+			pcTop->m_nFunc    = (EFunctionCode)F_DOCUMENT_TOPMENU;
+			pcTop->m_nLevel   = 0;
+			pcTop->m_sName[0] = L'\0';	// 空にするとストリングテーブルから引く
+			pcTop->m_sKey[0]  = L'D';
+			pcTop->m_sKey[1]  = L'\0';
+			mainmenu.m_nMainMenuNum++;
+
+			// 中身（退避したドキュメントの一覧）
+			CMainMenu* pcItem = &mainmenu.m_cMainMenuTbl[mainmenu.m_nMainMenuNum];
+			pcItem->m_nType    = T_SPECIAL;
+			pcItem->m_nFunc    = F_STASH_LIST;
+			pcItem->m_nLevel   = 1;
+			pcItem->m_sName[0] = L'\0';
+			pcItem->m_sKey[0]  = L'\0';
+			pcItem->m_sKey[1]  = L'\0';
+			mainmenu.m_nMainMenuNum++;
+
+			// トップレベルの索引を作り直す
+			int nTop = 0;
+			for( int i = 0; i < mainmenu.m_nMainMenuNum && nTop < MAX_MAINMENU_TOP; i++ ){
+				if( 0 == mainmenu.m_cMainMenuTbl[i].m_nLevel ){
+					mainmenu.m_nMenuTopIdx[nTop++] = i;
+				}
+			}
+			for( ; nTop < MAX_MAINMENU_TOP; nTop++ ){
+				mainmenu.m_nMenuTopIdx[nTop] = -1;
+			}
+		}
+	}
 }
 
 /*!

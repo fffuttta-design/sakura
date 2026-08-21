@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -807,6 +807,7 @@
     <ClCompile Include="..\sakura_core\uiparts\CVisualProgress.cpp" />
     <ClCompile Include="..\sakura_core\uiparts\CWaitCursor.cpp" />
     <ClCompile Include="..\sakura_core\util\file.cpp" />
+    <ClCompile Include="..\sakura_core\util\quickstash.cpp" />
     <ClCompile Include="..\sakura_core\util\format.cpp" />
     <ClCompile Include="..\sakura_core\util\input.cpp" />
     <ClCompile Include="..\sakura_core\util\MessageBoxF.cpp" />

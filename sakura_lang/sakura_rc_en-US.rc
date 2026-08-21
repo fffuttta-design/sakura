@@ -2273,6 +2273,8 @@ BEGIN
     F_OPTION_TOPMENU        "Option"
     F_WINDOW_TOPMENU        "Window"
     F_HELP_TOPMENU          "Help"
+    F_DOCUMENT_TOPMENU      "Documents"
+    F_STASH_LIST_NAME       "Stashed documents"
     F_WINDOW_LIST_SUBMENU   "Window List"
 END
 
@@ -2946,6 +2948,7 @@ STRINGTABLE
 BEGIN
     F_WINDOW_LIST           "Window List"
     F_FILE_USED_RECENTLY    "Recently Used File"
+    F_STASH_LIST            "Document list"
     F_FOLDER_USED_RECENTLY  "Recently Used Folder"
     F_CUSTMENU_LIST         "Custom Menus"
     F_USERMACRO_LIST        "Registered Macros"

@@ -44,6 +44,8 @@
 #include "util/os.h"		//WM_MOUSEWHEEL,WM_THEMECHANGED
 #include "util/window.h"
 #include "util/shell.h"
+#include "util/file.h"			// 【自前改造】my_splitpath_t
+#include "util/quickstash.h"	// 【自前改造】ドキュメント（退避）一覧
 #include "util/string_ex2.h"
 #include "plugin/CJackManager.h"
 #include "agent/CGrepAgent.h"
@@ -898,6 +900,10 @@ void CEditWnd::LayoutMainMenu()
 						nCount++;
 					}
 				}
+				break;
+			case F_STASH_LIST:				//【自前改造】退避したドキュメント
+				// 0件でもメニューを押せるようにしておく（「退避フォルダーを開く」を出すため）
+				nCount = 1 + (int)GetQuickStashFiles( MAX_STASH_MENU ).size();
 				break;
 			default:
 				break;
@@ -2189,6 +2195,16 @@ void CEditWnd::OnCommand( WORD wNotifyCode, WORD wID , HWND hwndCtl )
 			SLoadInfo sLoadInfo(checkEditInfo.m_szPath, checkEditInfo.m_nCharCode, false);
 			GetDocument()->m_cDocFileOperation.FileLoad( &sLoadInfo );	//	Oct.  9, 2004 genta 共通関数化
 		}
+		//【自前改造】ドキュメント（退避したもの）を開く
+		else if( wID - IDM_SELSTASH >= 0 && wID - IDM_SELSTASH < MAX_STASH_MENU ){
+			// メニューを作った時点の並びで開く（作成直後なので基本ずれない）
+			const std::vector<std::wstring> vFiles = GetQuickStashFiles( MAX_STASH_MENU );
+			const size_t nIdx = (size_t)(wID - IDM_SELSTASH);
+			if( nIdx < vFiles.size() ){
+				SLoadInfo sLoadInfo( vFiles[nIdx].c_str(), CODE_AUTODETECT, false );
+				GetDocument()->m_cDocFileOperation.FileLoad( &sLoadInfo );
+			}
+		}
 		//最近使ったフォルダー
 		else if( wID - IDM_SELOPENFOLDER >= 0 && wID - IDM_SELOPENFOLDER < 999){
 			//フォルダー取得
@@ -2574,6 +2590,37 @@ bool CEditWnd::InitMenu_Special(HMENU hMenu, EFunctionCode eFunc)
 			const CMRUFolder cMRUFolder;
 			cMRUFolder.CreateMenu( hMenu, &m_cMenuDrawer );
 			bInList = (cMRUFolder.MenuLength() > 0);
+		}
+		break;
+	case F_STASH_LIST:				//【自前改造】退避したドキュメント
+		/* 退避フォルダーの中身を新しい順に並べる。選ぶとそのまま開く */
+		{
+			const std::vector<std::wstring> vFiles = GetQuickStashFiles( MAX_STASH_MENU );
+			for( size_t i = 0; i < vFiles.size(); ++i ){
+				// メニューには「ファイル名（拡張子なし）」だけ出す。
+				// 名前が「日時＋先頭行」なので、これだけで中身が見分けられる。
+				WCHAR szName[_MAX_FNAME];
+				WCHAR szExt [_MAX_EXT];
+				my_splitpath_t( vFiles[i].c_str(), nullptr, nullptr, szName, szExt );
+				std::wstring strLabel = szName;
+				if( 0 != wcsicmp( szExt, L".txt" ) ){
+					strLabel += szExt;	// txt 以外は拡張子も見せる
+				}
+				// '&' はメニューでアクセスキー指定になってしまうので潰す
+				for( size_t n = strLabel.find( L'&' ); n != std::wstring::npos; n = strLabel.find( L'&', n + 2 ) ){
+					strLabel.insert( n, 1, L'&' );
+				}
+				m_cMenuDrawer.MyAppendMenu( hMenu, MF_BYPOSITION | MF_STRING,
+					IDM_SELSTASH + (int)i, strLabel.c_str(), L"", FALSE );
+				bInList = true;
+			}
+			if( !vFiles.empty() ){
+				::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
+			}
+			// 退避が0件でも押せるように、フォルダーを開く項目は常に出す
+			m_cMenuDrawer.MyAppendMenu( hMenu, MF_BYPOSITION | MF_STRING,
+				F_QUICK_STASH_OPEN, L"", L"", FALSE );
+			bInList = true;
 		}
 		break;
 	case F_CUSTMENU_LIST:			// カスタムメニューリスト

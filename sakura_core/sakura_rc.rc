@@ -2217,6 +2217,8 @@ BEGIN
     F_OPTION_TOPMENU        "設定"
     F_WINDOW_TOPMENU        "ウィンドウ"
     F_HELP_TOPMENU          "ヘルプ"
+    F_DOCUMENT_TOPMENU      "ドキュメント"
+    F_STASH_LIST_NAME       "退避したドキュメント"
     F_WINDOW_LIST_SUBMENU   "ウィンドウ一覧"
 END
 
@@ -2892,6 +2894,7 @@ STRINGTABLE
 BEGIN
     F_WINDOW_LIST           "ウィンドウリスト"
     F_FILE_USED_RECENTLY    "最近使ったファイル"
+    F_STASH_LIST            "ドキュメント一覧"
     F_FOLDER_USED_RECENTLY  "最近使ったフォルダー"
     F_CUSTMENU_LIST         "カスタムメニューリスト"
     F_USERMACRO_LIST        "登録済みマクロリスト"
