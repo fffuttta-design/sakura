@@ -38,6 +38,40 @@ public static class SkrWin
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool altTab);
     [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int pid);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", CharSet = CharSet.Unicode)]
+    public static extern bool SpiGet(uint uiAction, uint uiParam, ref uint pvParam, uint fWinIni);
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", CharSet = CharSet.Unicode)]
+    public static extern bool SpiSet(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+
+    // 🔥 SetForegroundWindow は OS のフォーカス保護でほぼ断られる。
+    //    「前面を奪う待ち時間」を一時的に 0 にし、前面スレッドに入力をつないでから呼ぶと通る。
+    public static void ForceForeground(IntPtr hWnd)
+    {
+        if (hWnd == IntPtr.Zero) { return; }
+        ShowWindow(hWnd, 9);   // SW_RESTORE（最小化されていても戻す）
+
+        uint oldTimeout = 0;
+        SpiGet(0x2000, 0, ref oldTimeout, 0);              // SPI_GETFOREGROUNDLOCKTIMEOUT
+        SpiSet(0x2001, 0, IntPtr.Zero, 0x02);              // SPI_SETFOREGROUNDLOCKTIMEOUT = 0
+
+        IntPtr fg = GetForegroundWindow();
+        uint fgPid = 0;
+        uint fgThread = GetWindowThreadProcessId(fg, out fgPid);
+        uint myThread = GetCurrentThreadId();
+        bool attached = false;
+        if (fgThread != 0 && fgThread != myThread) { attached = AttachThreadInput(myThread, fgThread, true); }
+
+        BringWindowToTop(hWnd);
+        SetForegroundWindow(hWnd);
+        SwitchToThisWindow(hWnd, true);
+
+        if (attached) { AttachThreadInput(myThread, fgThread, false); }
+
+        SpiSet(0x2001, 0, new IntPtr(oldTimeout), 0x02);   // 元に戻す
+    }
 
     // 指定プロセスが持つ「見えていて題名のある窓」を1つ返す（＝エディタの窓）
     public static IntPtr FindMainWindow(int[] pids)
@@ -120,9 +154,21 @@ function Set-Status([string]$main, [string]$sub) {
     [System.Windows.Forms.Application]::DoEvents()
 }
 
+# 更新は自分の目で追えない（アプリが落ちている最中に動く）ので、あとで追えるよう記録を残す
+$logPath = Join-Path $DstDir 'update.log'
+function Write-Log([string]$msg) {
+    try {
+        $line = ('{0}  {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg)
+        Add-Content -Path $logPath -Value $line -Encoding UTF8
+    } catch {}
+}
+Write-Log '--- 更新を開始 ---'
+Write-Log ('進捗窓を表示（DPI {0}%）' -f [int]($scale * 100))
+
 try {
     # --- 1. アプリが終わるのを待つ ------------------------------------------
     Set-Status '更新しています...' 'アプリの終了を待っています'
+    Write-Log 'アプリの終了を待っています'
     $exe = Join-Path $DstDir 'sakura.exe'
     $waited = 0
     while ($waited -lt 60) {
@@ -147,7 +193,7 @@ try {
 
     # --- 2. コピーする -------------------------------------------------------
     # 設定ファイルは持っていかない（引き継いだ設定が消えてしまう）
-    $exclude = @('sakura.ini', 'update-check.txt')
+    $exclude = @('sakura.ini', 'update-check.txt', 'update.log')
     $files = @(Get-ChildItem $SrcDir -Recurse -File |
                Where-Object { $exclude -notcontains $_.Name -and $_.Name -notlike 'sakura.ini.*' })
 
@@ -156,6 +202,7 @@ try {
     $bar.Maximum = [Math]::Max(1, $files.Count)
     $bar.Value   = 0
     Set-Status '更新しています...' ('0 / {0}' -f $files.Count)
+    Write-Log ('コピー開始（{0} 件）' -f $files.Count)
 
     $done = 0
     foreach ($f in $files) {
@@ -174,6 +221,8 @@ try {
         $bar.Value = [Math]::Min($bar.Maximum, $done)
         Set-Status $null ('{0} / {1}' -f $done, $files.Count)
     }
+
+    Write-Log 'コピー完了'
 
     # --- 3. 起動し直して、前面に出す -----------------------------------------
     # 裏で立ち上がると「気づいたら更新されていた」になるので、必ず手前に持ってくる。
@@ -205,11 +254,10 @@ try {
             $form.TopMost = $false
             [System.Windows.Forms.Application]::DoEvents()
 
-            [SkrWin]::ShowWindow($hwnd, 9) | Out-Null        # SW_RESTORE（最小化されていても戻す）
-            [SkrWin]::BringWindowToTop($hwnd) | Out-Null
-            [SkrWin]::SetForegroundWindow($hwnd) | Out-Null
-            # SetForegroundWindow は OS に断られることがあるので、通りやすい方も併用する
-            [SkrWin]::SwitchToThisWindow($hwnd, $true)
+            [SkrWin]::ForceForeground($hwnd)
+            Write-Log 'アプリを前面に出した'
+        } else {
+            Write-Log 'エディタの窓が見つからなかった（前面化なし）'
         }
     }
     Start-Sleep -Milliseconds 400
@@ -227,6 +275,7 @@ catch {
     if (Test-Path $exe) { Start-Process $exe }
 }
 finally {
+    Write-Log '--- 更新を終了 ---'
     $form.Close()
     $form.Dispose()
 }
