@@ -47,6 +47,150 @@
 #include "sakura_rc.h"
 #include "config/app_constants.h"
 
+// ============================================================================
+// 【自前改造】クイック退避（MY_MODS.md 参照）
+//
+//   「名前を決めて・保存場所を決めて」が重いので、無題の文書はダイアログを出さずに
+//   Google ドライブの退避フォルダーへ保存する。名前は「日時＋先頭行」で自動生成する。
+// ============================================================================
+
+namespace {
+
+//! 退避フォルダーのパスを決めて、無ければ作る
+/*!
+	@return 退避フォルダーのフルパス。用意できなかったときは空文字列
+	@note ドライブレターを決め打ちすると Drive 未マウント時に黙って死ぬので、
+	      見つからなければユーザーフォルダーへ逃がす
+*/
+std::wstring GetQuickStashDir()
+{
+	// 候補1: Google ドライブ（H: = contact@run-strategy.jp を優先。次に G: 個人、I: 家族）
+	static const WCHAR* const ppszDriveCandidates[] = { L"H:", L"G:", L"I:" };
+	static const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"サクラエディタ改造", L"退避" };
+
+	for( const WCHAR* pszDrive : ppszDriveCandidates ){
+		std::wstring strPath = pszDrive;
+		strPath += L"\\";
+		strPath += ppszSubDirs[0];
+		if( !IsDirectory( strPath.c_str() ) ){
+			continue;	// このドライブはマウントされていない
+		}
+		// マイドライブの下を順に掘る（無ければ作る）
+		bool bOk = true;
+		for( size_t i = 1; i < _countof(ppszSubDirs); ++i ){
+			strPath += L"\\";
+			strPath += ppszSubDirs[i];
+			if( !IsDirectory( strPath.c_str() ) && !::CreateDirectory( strPath.c_str(), nullptr ) ){
+				bOk = false;
+				break;
+			}
+		}
+		if( bOk ){
+			return strPath;
+		}
+	}
+
+	// 候補2: ユーザーフォルダー（Drive が無い端末でも動くように）
+	WCHAR szProfile[_MAX_PATH];
+	szProfile[0] = L'\0';
+	if( 0 < ::GetEnvironmentVariable( L"USERPROFILE", szProfile, _countof(szProfile) ) ){
+		std::wstring strPath = szProfile;
+		strPath += L"\\サクラエディタ退避";
+		if( IsDirectory( strPath.c_str() ) || ::CreateDirectory( strPath.c_str(), nullptr ) ){
+			return strPath;
+		}
+	}
+
+	return std::wstring();
+}
+
+//! 先頭の中身のある行から、ファイル名に使える短い見出しを作る
+/*!
+	@param[in] cDocLineMgr 対象の文書
+	@return 見出し文字列（30文字まで）。作れなければ空文字列
+	@note ファイル名に使えない文字と前後の空白は落とす
+*/
+std::wstring MakeQuickStashTitle( const CDocLineMgr& cDocLineMgr )
+{
+	const int MAX_TITLE_LEN = 30;
+	std::wstring strTitle;
+
+	for( const CDocLine* pcDocLine = cDocLineMgr.GetDocLineTop();
+		 nullptr != pcDocLine && strTitle.empty();
+		 pcDocLine = pcDocLine->GetNextLine() )
+	{
+		const wchar_t*  pLine = pcDocLine->GetPtr();
+		const int       nLen  = (Int)pcDocLine->GetLengthWithoutEOL();
+		for( int i = 0; i < nLen && (int)strTitle.length() < MAX_TITLE_LEN; ++i ){
+			const wchar_t c = pLine[i];
+			// ファイル名に使えない文字・制御文字は捨てる
+			if( c < L' ' || nullptr != wcschr( L"\\/:*?\"<>|", c ) ){
+				continue;
+			}
+			// 行頭の空白は見出しに入れない
+			if( strTitle.empty() && (L' ' == c || L'\t' == c) ){
+				continue;
+			}
+			strTitle += ( L'\t' == c ) ? L' ' : c;
+		}
+	}
+
+	// 末尾の空白とピリオドを落とす（Windows がファイル名として嫌がるため）
+	while( !strTitle.empty() ){
+		const wchar_t c = strTitle[strTitle.length() - 1];
+		if( L' ' != c && L'.' != c ){
+			break;
+		}
+		strTitle.erase( strTitle.length() - 1 );
+	}
+	return strTitle;
+}
+
+//! 退避先のフルパスを作る（まだ存在しない名前を返す）
+/*!
+	@param[in] cDocLineMgr 対象の文書（先頭行から見出しを作るのに使う）
+	@return 退避先のフルパス。用意できなかったときは空文字列
+*/
+std::wstring MakeQuickStashPath( const CDocLineMgr& cDocLineMgr )
+{
+	const std::wstring strDir = GetQuickStashDir();
+	if( strDir.empty() ){
+		return std::wstring();
+	}
+
+	// 日時 → 「2026-08-21_1240」
+	SYSTEMTIME systime;
+	::GetLocalTime( &systime );
+	WCHAR szStamp[32];
+	::auto_sprintf_s( szStamp, _countof(szStamp), L"%04d-%02d-%02d_%02d%02d",
+		systime.wYear, systime.wMonth, systime.wDay, systime.wHour, systime.wMinute );
+
+	const std::wstring strTitle = MakeQuickStashTitle( cDocLineMgr );
+
+	// 同じ分に何度も退避したとき用に連番で逃がす
+	for( int nSeq = 0; nSeq < 100; ++nSeq ){
+		std::wstring strName = szStamp;
+		if( !strTitle.empty() ){
+			strName += L" ";
+			strName += strTitle;
+		}
+		if( 0 < nSeq ){
+			WCHAR szSeq[16];
+			::auto_sprintf_s( szSeq, _countof(szSeq), L"(%d)", nSeq + 1 );
+			strName += szSeq;
+		}
+		strName += L".txt";
+
+		std::wstring strPath = strDir + L"\\" + strName;
+		if( !fexist( strPath.c_str() ) ){
+			return strPath;
+		}
+	}
+	return std::wstring();
+}
+
+} // namespace
+
 /* 新規作成 */
 void CViewCommander::Command_FILENEW( void )
 {
@@ -164,10 +308,23 @@ bool CViewCommander::Command_FILESAVE( bool warnbeep, bool askname )
 {
 	CEditDoc* pcDoc = GetDocument();
 
-	//ファイル名が指定されていない場合は「名前を付けて保存」のフローへ遷移
+	//ファイル名が指定されていない場合
 	if( !GetDocument()->m_cDocFile.GetFilePathClass().IsValidPath() ){
 		if( !askname )
 			return false;	// 保存しない
+		// 【自前改造】無題の文書は、名前も場所も聞かずに退避フォルダー（Googleドライブ）へ保存する。
+		//             「名前を決めて・保存場所を決めて」を無くすのが目的（MY_MODS.md 参照）。
+		//             明示的に置き場所を選びたいときは「名前を付けて保存」を使う。
+		std::wstring strStashPath = MakeQuickStashPath( GetDocument()->m_cDocLineMgr );
+		if( !strStashPath.empty() ){
+			if( pcDoc->m_cDocFileOperation.FileSaveAs( strStashPath.c_str(), CODE_NONE, EEolType::none, false ) ){
+				std::wstring strMsg = L"退避しました: ";
+				strMsg += strStashPath;
+				m_pCommanderView->SendStatusMessage( strMsg.c_str() );
+				return true;
+			}
+		}
+		// 退避先が用意できなかったときは、従来どおりダイアログに逃がす
 		return pcDoc->m_cDocFileOperation.FileSaveAs();
 	}
 
@@ -917,106 +1074,12 @@ BOOL CViewCommander::Command_INSFILE( LPCWSTR filename, ECodeType nCharCode, [[m
 	return bResult;
 }
 
-
-// ============================================================================
-// 【自前改造】クイック退避（MY_MODS.md 参照）
-//
-//   「名前を決めて保存場所を決めて…」が重いので、1キーで Google ドライブの
-//   退避フォルダーへ放り込めるようにする。ファイル名は日時＋先頭行から自動で作る。
-//   現在の文書のファイル名・パスは変えない（あくまで写しを外へ出すだけ）。
-// ============================================================================
-
-namespace {
-
-//! 退避フォルダーのパスを決めて、無ければ作る
-/*!
-	@return 退避フォルダーのフルパス。作れなかったときは空文字列
-	@note Google ドライブがマウントされていればそこへ。無ければユーザーフォルダーへ退避する
-	      （ドライブレターを決め打ちして黙って死ぬのを避ける）
-*/
-std::wstring GetQuickStashDir()
-{
-	const WCHAR* pszFolderName = L"ふた退避";
-
-	// 候補1: Google ドライブ（G: 個人 / H: 会社 / I: 家族 の順に探す）
-	static const WCHAR* const ppszDriveCandidates[] = { L"G:", L"H:", L"I:" };
-	for( const WCHAR* pszDrive : ppszDriveCandidates ){
-		std::wstring strMyDrive = pszDrive;
-		strMyDrive += L"\\マイドライブ";
-		if( IsDirectory( strMyDrive.c_str() ) ){
-			std::wstring strStash = strMyDrive + L"\\" + pszFolderName;
-			if( IsDirectory( strStash.c_str() ) ){
-				return strStash;
-			}
-			if( ::CreateDirectory( strStash.c_str(), nullptr ) ){
-				return strStash;
-			}
-		}
-	}
-
-	// 候補2: ユーザーフォルダー（Drive が無い端末でも動くように）
-	WCHAR szProfile[_MAX_PATH];
-	szProfile[0] = L'\0';
-	if( 0 < ::GetEnvironmentVariable( L"USERPROFILE", szProfile, _countof(szProfile) ) ){
-		std::wstring strStash = szProfile;
-		strStash += L"\\";
-		strStash += pszFolderName;
-		if( IsDirectory( strStash.c_str() ) || ::CreateDirectory( strStash.c_str(), nullptr ) ){
-			return strStash;
-		}
-	}
-
-	return std::wstring();
-}
-
-//! 先頭の中身のある行から、ファイル名に使える短い見出しを作る
-/*!
-	@param[in] pcDocLineMgr 対象の文書
-	@return 見出し文字列（30文字まで）。作れなければ空文字列
-	@note ファイル名に使えない文字と前後の空白は落とす
-*/
-std::wstring MakeQuickStashTitle( const CDocLineMgr& cDocLineMgr )
-{
-	const int MAX_TITLE_LEN = 30;
-	std::wstring strTitle;
-
-	for( const CDocLine* pcDocLine = cDocLineMgr.GetDocLineTop();
-		 nullptr != pcDocLine && strTitle.empty();
-		 pcDocLine = pcDocLine->GetNextLine() )
-	{
-		const wchar_t*  pLine = pcDocLine->GetPtr();
-		const int       nLen  = (Int)pcDocLine->GetLengthWithoutEOL();
-		for( int i = 0; i < nLen && (int)strTitle.length() < MAX_TITLE_LEN; ++i ){
-			const wchar_t c = pLine[i];
-			// ファイル名に使えない文字・制御文字は捨てる
-			if( c < L' ' || nullptr != wcschr( L"\\/:*?\"<>|", c ) ){
-				continue;
-			}
-			// 行頭の空白は見出しに入れない
-			if( strTitle.empty() && (L' ' == c || L'\t' == c) ){
-				continue;
-			}
-			strTitle += ( L'\t' == c ) ? L' ' : c;
-		}
-	}
-
-	// 末尾の空白とピリオドを落とす（Windows がファイル名として嫌がるため）
-	while( !strTitle.empty() ){
-		const wchar_t c = strTitle[strTitle.length() - 1];
-		if( L' ' != c && L'.' != c ){
-			break;
-		}
-		strTitle.erase( strTitle.length() - 1 );
-	}
-	return strTitle;
-}
-
-} // namespace
-
 /*! クイック退避
 
-	現在の文書を、名前も保存場所も聞かずに退避フォルダーへ書き出す。
-	ファイル名は「日時＋先頭行の見出し」。同名があれば連番を付ける。
+	現在の文書の写しを、名前も保存場所も聞かずに退避フォルダーへ書き出す。
+	無題の文書は Ctrl+S だけで退避先に保存されるので、こちらは
+	「もう名前が付いている文書を、退避フォルダーへ複製したい」ときに使う。
+	現在の文書のファイル名・パスは変えない。
 
 	@retval true  書き出せた
 	@retval false 書き出せなかった（理由はステータスバーに出す）
@@ -1024,44 +1087,10 @@ std::wstring MakeQuickStashTitle( const CDocLineMgr& cDocLineMgr )
 */
 bool CViewCommander::Command_QUICK_STASH( void )
 {
-	const std::wstring strDir = GetQuickStashDir();
-	if( strDir.empty() ){
-		m_pCommanderView->SendStatusMessage( L"退避フォルダーを作れませんでした" );
+	const std::wstring strPath = MakeQuickStashPath( GetDocument()->m_cDocLineMgr );
+	if( strPath.empty() ){
+		m_pCommanderView->SendStatusMessage( L"退避フォルダーを用意できませんでした" );
 		return false;
-	}
-
-	// 日時 → 「2026-08-21_1140」
-	SYSTEMTIME systime;
-	::GetLocalTime( &systime );
-	WCHAR szStamp[32];
-	::auto_sprintf_s( szStamp, _countof(szStamp), L"%04d-%02d-%02d_%02d%02d",
-		systime.wYear, systime.wMonth, systime.wDay, systime.wHour, systime.wMinute );
-
-	const std::wstring strTitle = MakeQuickStashTitle( GetDocument()->m_cDocLineMgr );
-
-	// 同じ分に何度も退避したとき用に連番で逃がす
-	std::wstring strPath;
-	for( int nSeq = 0; ; ++nSeq ){
-		std::wstring strName = szStamp;
-		if( !strTitle.empty() ){
-			strName += L" ";
-			strName += strTitle;
-		}
-		if( 0 < nSeq ){
-			WCHAR szSeq[16];
-			::auto_sprintf_s( szSeq, _countof(szSeq), L"(%d)", nSeq + 1 );
-			strName += szSeq;
-		}
-		strName += L".txt";
-
-		strPath = strDir + L"\\" + strName;
-		if( !fexist( strPath.c_str() ) ){
-			break;
-		}
-		if( 99 <= nSeq ){
-			m_pCommanderView->SendStatusMessage( L"退避先の名前が作れませんでした" );
-			return false;
-		}
 	}
 
 	// 本文を UTF-8 で書き出す（現在の文書のパス・文字コードには一切触らない）
@@ -1111,6 +1140,6 @@ void CViewCommander::Command_QUICK_STASH_OPEN( void )
 		return;
 	}
 	// 末尾に \ を付けてフォルダーとして渡す
-	std::wstring strDirArg = strDir + L"\\";
+	const std::wstring strDirArg = strDir + L"\\";
 	Command_FILEOPEN( nullptr, CODE_AUTODETECT, false, strDirArg.c_str() );
 }
