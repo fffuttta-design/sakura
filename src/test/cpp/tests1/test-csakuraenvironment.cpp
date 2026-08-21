@@ -22,6 +22,7 @@
 #include "util/file.h"
 #include "util/os.h"
 #include "util/tchar_convert.h"
+#include "util/updater.h"	// 【自前改造】PLUS_VERSION_BASE
 #include "recent/CMRUFolder.h"
 #include "version.h"
 
@@ -35,7 +36,12 @@ std::filesystem::path GetTempFilePathWithExt(std::wstring_view prefix, std::wstr
 
 namespace env {
 
-const std::wstring versionStr{ LTEXT(VERSION_STR) };
+// 【自前改造】$V は「2.4.4.7240」ではなく「v7」のような短い表記を返すようにした。
+//             （PLUS_VERSION_BASE を引いた＝改造版として何回目か。util/updater.h 参照）
+const std::wstring versionStr{
+	L"v" + std::to_wstring( ( PLUS_VERSION_BASE < BUILD_VERSION )
+		? ( BUILD_VERSION - PLUS_VERSION_BASE )
+		: BUILD_VERSION ) };
 
 /*!
  * @brief 期待値を表す構造体
