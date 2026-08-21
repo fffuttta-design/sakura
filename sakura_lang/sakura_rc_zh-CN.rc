@@ -2192,6 +2192,7 @@ BEGIN
     F_HELP_TOPMENU          "帮助"
     F_DOCUMENT_TOPMENU      "文档"
     F_STASH_LIST_NAME       "暂存的文档"
+    F_VERSION_TOPMENU       "版本"
     F_WINDOW_LIST_SUBMENU   "窗口列表"
 END
 

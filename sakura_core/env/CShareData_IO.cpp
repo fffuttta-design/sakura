@@ -2117,52 +2117,77 @@ void CShareData_IO::ShareData_IO_MainMenu( CDataProfile& cProfile )
 		// 書き出し時：一度でも出したことを記録しておく（本人が消したら復活させないため）
 		int nAddedOut = 1;
 		cProfile.IOProfileData( pszSecName, L"nDocumentMenuAdded", nAddedOut );
+		cProfile.IOProfileData( pszSecName, L"nVersionMenuAdded", nAddedOut );
 	}else{
 		CommonSetting_MainMenu& mainmenu = GetDllShareData().m_Common.m_sMainMenu;
 
-		int nAdded = 0;
-		cProfile.IOProfileData( pszSecName, L"nDocumentMenuAdded", nAdded );
+		// 足したいトップレベルメニュー。
+		//   m_nMarkFunc … これが表に居れば「もう足してある」と判断する目印
+		struct SAddTopMenu {
+			const WCHAR*	m_pszFlagKey;	//!< 一度足したことを覚えておく ini のキー
+			int				m_nTopFunc;		//!< 見出しのストリングテーブルID
+			WCHAR			m_cAccessKey;	//!< アクセスキー
+			EMainMenuType	m_nItemType;	//!< 中身の種類
+			EFunctionCode	m_nItemFunc;	//!< 中身の機能コード
+		};
+		static const SAddTopMenu addMenus[] = {
+			// ドキュメント（退避したものの一覧）
+			{ L"nDocumentMenuAdded", F_DOCUMENT_TOPMENU, L'D', T_SPECIAL, F_STASH_LIST    },
+			// バージョン（版の確認と更新）
+			{ L"nVersionMenuAdded",  F_VERSION_TOPMENU,  L'V', T_LEAF,    F_CHECK_UPDATE  },
+		};
 
-		bool bExist = false;
-		for( int i = 0; i < mainmenu.m_nMainMenuNum; i++ ){
-			if( mainmenu.m_cMainMenuTbl[i].m_nFunc == F_STASH_LIST ){
-				bExist = true;
-				break;
+		for( const SAddTopMenu& add : addMenus ){
+			int nAdded = 0;
+			cProfile.IOProfileData( pszSecName, add.m_pszFlagKey, nAdded );
+			if( 0 != nAdded ){
+				continue;	// 一度足した。本人が消したなら復活させない
 			}
-		}
 
-		if( !bExist && 0 == nAdded
-		 && mainmenu.m_nMainMenuNum + 2 <= int(std::size(mainmenu.m_cMainMenuTbl)) ){
+			bool bExist = false;
+			for( int i = 0; i < mainmenu.m_nMainMenuNum; i++ ){
+				if( mainmenu.m_cMainMenuTbl[i].m_nFunc == add.m_nItemFunc ){
+					bExist = true;
+					break;
+				}
+			}
+			if( bExist ){
+				continue;
+			}
+			if( mainmenu.m_nMainMenuNum + 2 > int(std::size(mainmenu.m_cMainMenuTbl)) ){
+				continue;	// 表が満杯
+			}
+
 			// 見出し（トップレベル）
 			CMainMenu* pcTop = &mainmenu.m_cMainMenuTbl[mainmenu.m_nMainMenuNum];
 			pcTop->m_nType    = T_NODE;
-			pcTop->m_nFunc    = (EFunctionCode)F_DOCUMENT_TOPMENU;
+			pcTop->m_nFunc    = (EFunctionCode)add.m_nTopFunc;
 			pcTop->m_nLevel   = 0;
 			pcTop->m_sName[0] = L'\0';	// 空にするとストリングテーブルから引く
-			pcTop->m_sKey[0]  = L'D';
+			pcTop->m_sKey[0]  = add.m_cAccessKey;
 			pcTop->m_sKey[1]  = L'\0';
 			mainmenu.m_nMainMenuNum++;
 
-			// 中身（退避したドキュメントの一覧）
+			// 中身
 			CMainMenu* pcItem = &mainmenu.m_cMainMenuTbl[mainmenu.m_nMainMenuNum];
-			pcItem->m_nType    = T_SPECIAL;
-			pcItem->m_nFunc    = F_STASH_LIST;
+			pcItem->m_nType    = add.m_nItemType;
+			pcItem->m_nFunc    = add.m_nItemFunc;
 			pcItem->m_nLevel   = 1;
 			pcItem->m_sName[0] = L'\0';
 			pcItem->m_sKey[0]  = L'\0';
 			pcItem->m_sKey[1]  = L'\0';
 			mainmenu.m_nMainMenuNum++;
+		}
 
-			// トップレベルの索引を作り直す
-			int nTop = 0;
-			for( int i = 0; i < mainmenu.m_nMainMenuNum && nTop < MAX_MAINMENU_TOP; i++ ){
-				if( 0 == mainmenu.m_cMainMenuTbl[i].m_nLevel ){
-					mainmenu.m_nMenuTopIdx[nTop++] = i;
-				}
+		// トップレベルの索引を作り直す
+		int nTop = 0;
+		for( int i = 0; i < mainmenu.m_nMainMenuNum && nTop < MAX_MAINMENU_TOP; i++ ){
+			if( 0 == mainmenu.m_cMainMenuTbl[i].m_nLevel ){
+				mainmenu.m_nMenuTopIdx[nTop++] = i;
 			}
-			for( ; nTop < MAX_MAINMENU_TOP; nTop++ ){
-				mainmenu.m_nMenuTopIdx[nTop] = -1;
-			}
+		}
+		for( ; nTop < MAX_MAINMENU_TOP; nTop++ ){
+			mainmenu.m_nMenuTopIdx[nTop] = -1;
 		}
 	}
 }

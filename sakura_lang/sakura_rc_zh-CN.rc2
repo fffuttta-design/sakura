@@ -138,7 +138,7 @@ END
 #ifdef _DEBUG
 IDI_ICON_STD            ICON         "../src/main/resources/images/icon_debug.ico"
 #else
-IDI_ICON_STD            ICON         "../src/main/resources/images/icon_std.ico"
+IDI_ICON_STD            ICON         "../src/main/resources/images/icon_plus.ico"
 #endif
 
 /////////////////////////////////////////////////////////////////////////////

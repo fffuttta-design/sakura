@@ -2275,6 +2275,7 @@ BEGIN
     F_HELP_TOPMENU          "Help"
     F_DOCUMENT_TOPMENU      "Documents"
     F_STASH_LIST_NAME       "Stashed documents"
+    F_VERSION_TOPMENU       "Version"
     F_WINDOW_LIST_SUBMENU   "Window List"
 END
 

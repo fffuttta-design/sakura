@@ -2219,6 +2219,7 @@ BEGIN
     F_HELP_TOPMENU          "ヘルプ"
     F_DOCUMENT_TOPMENU      "ドキュメント"
     F_STASH_LIST_NAME       "退避したドキュメント"
+    F_VERSION_TOPMENU       "バージョン"
     F_WINDOW_LIST_SUBMENU   "ウィンドウ一覧"
 END
 

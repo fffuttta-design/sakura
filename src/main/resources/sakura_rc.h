@@ -893,6 +893,7 @@
 #define F_WINDOW_LIST_SUBMENU           34060
 #define F_DOCUMENT_TOPMENU              34061
 #define F_STASH_LIST_NAME               34062
+#define F_VERSION_TOPMENU               34063
 #define STR_SELLANG_NAME                34080
 #define STR_SELLANG_LANGID              34081
 #define STR_SQLERR_EXEC_BUT_NOT_RUN     34085

@@ -2620,10 +2620,6 @@ bool CEditWnd::InitMenu_Special(HMENU hMenu, EFunctionCode eFunc)
 			// 退避が0件でも押せるように、フォルダーを開く項目は常に出す
 			m_cMenuDrawer.MyAppendMenu( hMenu, MF_BYPOSITION | MF_STRING,
 				F_QUICK_STASH_OPEN, L"", L"", FALSE );
-			// 共通仕様（アプリ共通仕様.md 第3部）＝自動更新があっても手動ボタンは必ず置く
-			::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
-			m_cMenuDrawer.MyAppendMenu( hMenu, MF_BYPOSITION | MF_STRING,
-				F_CHECK_UPDATE, L"", L"", FALSE );
 			bInList = true;
 		}
 		break;
