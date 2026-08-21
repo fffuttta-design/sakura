@@ -16,13 +16,29 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# --- 高DPI宣言（窓を作る前に必ずやる）---------------------------------------
+# 宣言しないと Windows が勝手に拡大表示して、文字がにじんだ窓になる。
+try {
+    Add-Type -Namespace SkrDpi -Name Api -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+'@
+    [SkrDpi.Api]::SetProcessDPIAware() | Out-Null
+} catch {}
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+
+# 宣言しただけでは座標は 96dpi のままなので、自分で倍率をかける
+$g0    = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
+$scale = $g0.DpiX / 96.0
+$g0.Dispose()
+function Px([int]$n) { return [int][Math]::Round($n * $scale) }
 
 # --- 窓を組み立てる ---------------------------------------------------------
 $form                 = New-Object System.Windows.Forms.Form
 $form.Text            = 'SakuraEditorPlus の更新'
-$form.Size            = New-Object System.Drawing.Size(420, 160)
+$form.ClientSize      = New-Object System.Drawing.Size((Px 410), (Px 112))
 $form.StartPosition   = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox     = $false
@@ -37,22 +53,22 @@ if (Test-Path $icon) {
 
 $labelMain            = New-Object System.Windows.Forms.Label
 $labelMain.Text       = '更新しています...'
-$labelMain.Location   = New-Object System.Drawing.Point(20, 22)
-$labelMain.Size       = New-Object System.Drawing.Size(370, 22)
+$labelMain.Location   = New-Object System.Drawing.Point((Px 20), (Px 18))
+$labelMain.Size       = New-Object System.Drawing.Size((Px 370), (Px 24))
 $labelMain.Font       = New-Object System.Drawing.Font($form.Font.FontFamily, 10)
 $form.Controls.Add($labelMain)
 
 $bar                  = New-Object System.Windows.Forms.ProgressBar
-$bar.Location         = New-Object System.Drawing.Point(20, 52)
-$bar.Size             = New-Object System.Drawing.Size(370, 20)
+$bar.Location         = New-Object System.Drawing.Point((Px 20), (Px 50))
+$bar.Size             = New-Object System.Drawing.Size((Px 370), (Px 20))
 $bar.Style            = 'Marquee'      # 待っている間は流れる表示
 $bar.MarqueeAnimationSpeed = 30
 $form.Controls.Add($bar)
 
 $labelSub             = New-Object System.Windows.Forms.Label
 $labelSub.Text        = ''
-$labelSub.Location    = New-Object System.Drawing.Point(20, 80)
-$labelSub.Size        = New-Object System.Drawing.Size(370, 20)
+$labelSub.Location    = New-Object System.Drawing.Point((Px 20), (Px 78))
+$labelSub.Size        = New-Object System.Drawing.Size((Px 370), (Px 20))
 $labelSub.ForeColor   = [System.Drawing.Color]::Gray
 $form.Controls.Add($labelSub)
 
