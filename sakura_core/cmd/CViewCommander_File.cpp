@@ -66,7 +66,7 @@ std::wstring GetQuickStashDir()
 {
 	// 候補1: Google ドライブ（H: = contact@run-strategy.jp を優先。次に G: 個人、I: 家族）
 	static const WCHAR* const ppszDriveCandidates[] = { L"H:", L"G:", L"I:" };
-	static const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"サクラエディタ改造", L"退避" };
+	static const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"SakuraEditorPlus", L"退避" };
 
 	for( const WCHAR* pszDrive : ppszDriveCandidates ){
 		std::wstring strPath = pszDrive;
@@ -95,7 +95,7 @@ std::wstring GetQuickStashDir()
 	szProfile[0] = L'\0';
 	if( 0 < ::GetEnvironmentVariable( L"USERPROFILE", szProfile, _countof(szProfile) ) ){
 		std::wstring strPath = szProfile;
-		strPath += L"\\サクラエディタ退避";
+		strPath += L"\\SakuraEditorPlus退避";
 		if( IsDirectory( strPath.c_str() ) || ::CreateDirectory( strPath.c_str(), nullptr ) ){
 			return strPath;
 		}
