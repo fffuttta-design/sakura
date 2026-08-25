@@ -283,6 +283,16 @@ LRESULT CTabWnd::OnTabLButtonUp( [[maybe_unused]] WPARAM wParam, LPARAM lParam )
 			m_nTabBorderArray = nullptr;
 		}
 		ApiWrap::Tooltip_Activate( TabCtrl_GetToolTips( m_hwndTab ), TRUE );	// ツールチップ有効化
+		// 【自前改造】結局並べ替えも分離も起きず、押したタブの上で離したなら本人の意図はクリック。
+		//   ドラッグ扱いになっていても切り替えを取りこぼさない。
+		if( !m_bTabSwapped && 0 <= nDstTab && m_nSrcTab == nDstTab && m_nSrcTab != nSelfTab )
+		{
+			TCITEM	tcitem;
+			tcitem.mask   = TCIF_PARAM;
+			tcitem.lParam = 0;
+			TabCtrl_GetItem( m_hwndTab, nDstTab, &tcitem );
+			ShowHideWindow( (HWND)tcitem.lParam, TRUE );
+		}
 		break;
 
 	default:
@@ -382,6 +392,19 @@ LRESULT CTabWnd::OnTabMouseMove( WPARAM wParam, LPARAM lParam )
 		// 元のタブから離れたらドラッグ開始
 		if( m_nSrcTab == nDstTab )
 			break;
+		// 【自前改造】ただのクリックをドラッグと誤認しないよう、システムのドラッグ判定幅を超えるまで待つ
+		//   本家は遊びがゼロで、押している間に1ドットでもタブから外れると並べ替えドラッグに化け、
+		//   タブの切り替えが捨てられる（＝クリックしたのに何も起きない）。
+		{
+			POINT ptCur = hitinfo.pt;
+			::ClientToScreen( m_hwndTab, &ptCur );
+			const int nDx = ptCur.x - m_ptSrcCursor.x;
+			const int nDy = ptCur.y - m_ptSrcCursor.y;
+			if( ( nDx < 0 ? -nDx : nDx ) < ::GetSystemMetrics( SM_CXDRAG )
+			 && ( nDy < 0 ? -nDy : nDy ) < ::GetSystemMetrics( SM_CYDRAG ) ){
+				break;	// まだクリックの範囲内
+			}
+		}
 		m_eDragState = DRAG_DRAG;
 		m_hDefaultCursor = ::GetCursor();
 		m_bTabSwapped = FALSE;
@@ -1337,58 +1360,31 @@ LRESULT CTabWnd::OnDrawItem( [[maybe_unused]] HWND hwnd, [[maybe_unused]] UINT u
 		// 状態に従ってテキストと背景色を決める
 
 		// 背景描画
-		if( !IsVisualStyle() ) {
-			::MyFillRect( gr, rcItem, COLOR_BTNFACE );
-		}else{
-			int iPartId = TABP_TABITEM;
-			int iStateId = TIS_NORMAL;
-			HTHEME hTheme = ::OpenThemeData( m_hwndTab, L"TAB" );
-			if( hTheme ) {
-				if( !bSelected ){
-					::InflateRect( &rcFullItem, DpiScaleX(2), DpiScaleY(2) );
-					if( nTabIndex == nSelIndex - 1 ){
-						rcFullItem.right -= DpiScaleX(1);
-					}else if( nTabIndex == nSelIndex + 1 ){
-						rcFullItem.left += DpiScaleX(1);
-					}
-				}
-				bool bHotTracked = ::GetTextColor(hdc) == GetSysColor(COLOR_HOTLIGHT);
+		// 【自前改造】「いま開いているタブ」がひと目で分かる描き分けにする。
+		//   本家はテーマ任せだが、Windows 11 では非選択タブのほうが白く浮き上がり、
+		//   選択中のタブは背景に沈んで見える。見た目が逆なので押すタブを間違える
+		//   （＝「クリックしても切り替わらない」の正体。実際は今開いているタブを押していた）。
+		//   ∴ ここで自前に塗り、選択＝白地＋上端の色帯／非選択＝灰色、に固定する。
+		{
+			const bool     bDark         = IsDarkModeActive();
+			const COLORREF clrActiveBk   = bDark ? DarkMode::getHotBackgroundColor() : ::GetSysColor( COLOR_WINDOW );
+			const COLORREF clrInactiveBk = bDark ? DarkMode::getDlgBackgroundColor() : ::GetSysColor( COLOR_BTNFACE );
+			const COLORREF clrEdge       = bDark ? DarkMode::getEdgeColor()          : ::GetSysColor( COLOR_3DSHADOW );
+			const COLORREF clrAccent     = ::GetSysColor( COLOR_HIGHLIGHT );
 
-				RECT rcBk(rcFullItem);
-				if( bSelected ){
-					iStateId = TIS_SELECTED;
-					if( nTabIndex == 0 ){
-						if( nTabIndex == nTabCount - 1 ){
-							iPartId = TABP_TOPTABITEMBOTHEDGE;
-						}else{
-							iPartId = TABP_TOPTABITEMLEFTEDGE;
-						}
-					}else if( nTabIndex == nTabCount - 1 ){
-						iPartId = TABP_TOPTABITEMRIGHTEDGE;
-					}else{
-						iPartId = TABP_TOPTABITEM;
-					}
-				}else{
-					rcFullItem.top += DpiScaleY(2);
-					rcBk.top += DpiScaleY(2);
-					iStateId = bHotTracked ? TIS_HOT : TIS_NORMAL;
-					if( nTabIndex == 0 ){
-						if( nTabIndex == nTabCount - 1 ){
-							iPartId = TABP_TABITEMBOTHEDGE;
-						}else{
-							iPartId = TABP_TABITEMLEFTEDGE;
-						}
-					}else if( nTabIndex == nTabCount - 1 ){
-						iPartId = TABP_TABITEMRIGHTEDGE;
-					}else{
-						iPartId = TABP_TABITEM;
-					}
-				}
-
-				if( ::IsThemeBackgroundPartiallyTransparent(hTheme, iPartId, iStateId) ) {
-					::DrawThemeParentBackground(m_hwndTab, hdc, &rcFullItem);
-				}
-				::DrawThemeBackground(hTheme, hdc, iPartId, iStateId, &rcBk, nullptr);
+			if( bSelected ){
+				::MyFillRect( gr, rcFullItem, clrActiveBk );
+				RECT rcAccent = rcFullItem;
+				rcAccent.bottom = rcAccent.top + DpiScaleY(3);
+				::MyFillRect( gr, rcAccent, clrAccent );	// 上端の帯＝ここが今のタブ
+			}else{
+				// 非選択タブは少し低い位置に描いて、選択タブとの段差を作る
+				::InflateRect( &rcFullItem, DpiScaleX(2), DpiScaleY(2) );
+				rcFullItem.top += DpiScaleY(4);
+				::MyFillRect( gr, rcFullItem, clrInactiveBk );
+				RECT rcSep = rcFullItem;					// 右端に薄い区切り線
+				rcSep.left = rcSep.right - DpiScaleX(1);
+				::MyFillRect( gr, rcSep, clrEdge );
 			}
 		}
 
@@ -1410,8 +1406,10 @@ LRESULT CTabWnd::OnDrawItem( [[maybe_unused]] HWND hwnd, [[maybe_unused]] UINT u
 		}
 
 		// テキスト描画
+		// 【自前改造】選択タブは濃く、非選択タブは少し控えめにして、どれが今のタブか字でも分かるようにする
 		COLORREF clrText;
-		clrText = ::GetSysColor(COLOR_MENUTEXT);
+		clrText = IsDarkModeActive() ? DarkMode::getTextColor()
+									 : ::GetSysColor( bSelected ? COLOR_WINDOWTEXT : COLOR_BTNTEXT );
 		gr.PushTextForeColor( clrText );
 		gr.SetTextBackTransparent(true);
 		RECT rcText = rcItem;
@@ -2296,7 +2294,11 @@ void CTabWnd::LayoutTab( void )
 
 	// オーナードロー状態を共通設定に追随させる
 	BOOL bDispTabClose = m_pShareData->m_Common.m_sTabBar.m_bDispTabClose;
-	BOOL bOwnerDraw = bDispTabClose;
+	// 【自前改造】タブは常に自前で描く。
+	//   本家は「タブに閉じるボタンを表示」のときだけ自前描画で、それ以外はWindowsのテーマ任せ。
+	//   ところが Windows 11 のテーマは非選択タブを白く浮き上がらせ、選択中のタブを背景に沈めるため、
+	//   どれが今のタブか分からない（＝逆に見える）。∴ 設定に関わらず自前描画にして見た目を固定する。
+	BOOL bOwnerDraw = TRUE;
 	if( bOwnerDraw && !(lStyle & TCS_OWNERDRAWFIXED) ){
 		lStyle |= TCS_OWNERDRAWFIXED;
 	}else if( !bOwnerDraw && (lStyle & TCS_OWNERDRAWFIXED) ){
