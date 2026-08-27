@@ -1,4 +1,4 @@
-/*! @file
+﻿/*! @file
 	@brief 【自前改造】クイック退避（ドキュメント）の共通処理
 
 	SPDX-License-Identifier: Zlib
@@ -52,21 +52,74 @@ std::wstring GetQuickStashDir()
 	return std::wstring();
 }
 
+bool ParseStashNameTime( LPCWSTR pszFileName, FILETIME* pftOut )
+{
+	if( nullptr == pszFileName ){
+		return false;
+	}
+	// 「YYYY-MM-DD_hhmm」の形か
+	const size_t nLen = wcslen( pszFileName );
+	if( nLen < 15 ){
+		return false;
+	}
+	auto isDigits = []( LPCWSTR p, size_t nPos, size_t nCount ){
+		for( size_t i = 0; i < nCount; ++i ){
+			if( p[nPos + i] < L'0' || L'9' < p[nPos + i] ) return false;
+		}
+		return true;
+	};
+	if( !isDigits( pszFileName, 0, 4 ) || L'-' != pszFileName[4]
+	 || !isDigits( pszFileName, 5, 2 ) || L'-' != pszFileName[7]
+	 || !isDigits( pszFileName, 8, 2 ) || L'_' != pszFileName[10]
+	 || !isDigits( pszFileName, 11, 4 ) ){
+		return false;
+	}
+	auto toInt = []( LPCWSTR p, size_t nPos, size_t nCount ){
+		int n = 0;
+		for( size_t i = 0; i < nCount; ++i ){
+			n = n * 10 + (int)( p[nPos + i] - L'0' );
+		}
+		return n;
+	};
+	SYSTEMTIME st;
+	::ZeroMemory( &st, sizeof(st) );
+	st.wYear   = (WORD)toInt( pszFileName, 0, 4 );
+	st.wMonth  = (WORD)toInt( pszFileName, 5, 2 );
+	st.wDay    = (WORD)toInt( pszFileName, 8, 2 );
+	st.wHour   = (WORD)toInt( pszFileName, 11, 2 );
+	st.wMinute = (WORD)toInt( pszFileName, 13, 2 );
+	if( st.wMonth < 1 || 12 < st.wMonth || st.wDay < 1 || 31 < st.wDay
+	 || 23 < st.wHour || 59 < st.wMinute ){
+		return false;
+	}
+	// 名前に入っているのは地方時なので、UTC に直してから比べる
+	// （更新日時の FILETIME は UTC。直さないと時差のぶんだけ並び順が狂う）
+	SYSTEMTIME stUtc;
+	if( !::TzSpecificLocalTimeToSystemTime( nullptr, &st, &stUtc ) ){
+		return false;
+	}
+	return FALSE != ::SystemTimeToFileTime( &stUtc, pftOut );
+}
+
 std::vector<std::wstring> GetQuickStashFiles( int nMax )
 {
+	return GetStashFilesInDir( GetQuickStashDir(), nMax );
+}
+
+std::vector<std::wstring> GetStashFilesInDir( const std::wstring& strDir, int nMax )
+{
 	std::vector<std::wstring> vRet;
-	if( nMax <= 0 ){
+	if( nMax <= 0 || strDir.empty() ){
 		return vRet;
 	}
 
-	const std::wstring strDir = GetQuickStashDir();
-	if( strDir.empty() ){
-		return vRet;
-	}
-
-	// 更新日時で並べ替えるので、いったん日時つきで集める
+	// 並べ替えのために日時つきで集める。
+	// 名前が「2026-08-25_1218 ...」で始まっていれば、そこの日時を並び順に使う
+	// （一覧に出す日時と並び順を一致させるため。一致していないと「新しい順のはずなのに
+	//   古い日付が上にある」という見え方になる）
 	struct SEntry {
-		FILETIME		ftWrite;
+		FILETIME		ftSort;		//!< 並べ替えに使う日時
+		FILETIME		ftWrite;	//!< 更新日時（同じ分に何個もあるときの決着用）
 		std::wstring	strPath;
 	};
 	std::vector<SEntry> vEntries;
@@ -87,6 +140,9 @@ std::vector<std::wstring> GetQuickStashFiles( int nMax )
 		}
 		SEntry e;
 		e.ftWrite  = fd.ftLastWriteTime;
+		if( !ParseStashNameTime( fd.cFileName, &e.ftSort ) ){
+			e.ftSort = fd.ftLastWriteTime;
+		}
 		e.strPath  = strDir;
 		e.strPath += L"\\";
 		e.strPath += fd.cFileName;
@@ -96,6 +152,10 @@ std::vector<std::wstring> GetQuickStashFiles( int nMax )
 
 	// 新しい順（あとで書いたものほど上に出したい）
 	std::sort( vEntries.begin(), vEntries.end(), []( const SEntry& a, const SEntry& b ){
+		const int nCmp = ::CompareFileTime( &a.ftSort, &b.ftSort );
+		if( 0 != nCmp ){
+			return 0 < nCmp;
+		}
 		return 0 < ::CompareFileTime( &a.ftWrite, &b.ftWrite );
 	} );
 

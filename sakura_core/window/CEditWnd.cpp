@@ -273,6 +273,9 @@ void CEditWnd::UpdateCaption()
 	ChangeFileNameNotify( pszCap,
 		GetListeningDoc()->m_cDocFile.GetFilePath(),
 		CEditApp::getInstance()->m_pcGrepAgent->m_bGrepMode ); // 2006.01.28 ryoji ファイル名、Grepモードパラメータを追加
+
+	// 【自前改造】ノート一覧も追従させる（連打よけは CNoteBar 側で行う）
+	RefreshNoteBar();
 }
 
 //!< ウィンドウ生成用の矩形を取得
@@ -671,6 +674,9 @@ HWND CEditWnd::Create(
 	// ミニマップ
 	LayoutMiniMap();
 
+	// 【自前改造】ノートバー（左サイドバー）
+	LayoutNoteBar();
+
 	/* バーの配置終了 */
 	EndLayoutBars( FALSE );
 
@@ -1012,6 +1018,60 @@ void CEditWnd::LayoutMiniMap( void )
 	}
 }
 
+/*! ノートバー（左サイドバー）の配置処理
+
+	@date 2026/08/27 【自前改造】新規作成
+*/
+void CEditWnd::LayoutNoteBar( void )
+{
+	if( m_pShareData->m_Common.m_sWindow.m_bDispNoteBar ){
+		if( nullptr == m_cNoteBar.GetHwnd() ){
+			m_cNoteBar.Open( G_AppInstance(), GetHwnd() );
+		}
+	}else{
+		m_cNoteBar.Close();
+	}
+}
+
+/*! ノート一覧を作り直す
+
+	@date 2026/08/27 【自前改造】新規作成
+*/
+void CEditWnd::RefreshNoteBar( void )
+{
+	if( m_cNoteBar.GetHwnd() ){
+		m_cNoteBar.Refresh();
+	}
+}
+
+/*! ノートバーの幅が変わったことを全ウィンドウに伝える
+
+	@date 2026/08/27 【自前改造】新規作成
+*/
+void CEditWnd::NotifyNoteBarChanged( void )
+{
+	CAppNodeGroupHandle(0).PostMessageToAllEditors(
+		MYWM_BAR_CHANGE_NOTIFY,
+		(WPARAM)MYBCN_NOTEBAR,
+		(LPARAM)GetHwnd(),
+		GetHwnd()
+	);
+}
+
+/*! 今の大きさのまま中身を配置し直す
+
+	ノートバーの幅をドラッグで変えたときに使う。ウィンドウの大きさは変わらないので
+	EndLayoutBars() のような画面全体の再描画はしない（ちらつき防止）。
+
+	@date 2026/08/27 【自前改造】新規作成
+*/
+void CEditWnd::RelayoutClientArea( void )
+{
+	RECT rc;
+	::GetClientRect( GetHwnd(), &rc );
+	OnSize2( (WPARAM)m_nWinSizeType, MAKELPARAM( rc.right - rc.left, rc.bottom - rc.top ), false );
+}
+
 /*! バーの配置終了処理
 	@date 2006.12.19 ryoji 新規作成
 	@date 2007.03.04 ryoji 印刷プレビュー時はバーを隠す
@@ -1038,6 +1098,9 @@ void CEditWnd::EndLayoutBars( BOOL bAdjust/* = TRUE*/ )
 	}
 	if( m_cMiniMapView.GetHwnd() ){
 		::ShowWindow( m_cMiniMapView.GetHwnd(), nCmdShow );
+	}
+	if( nullptr != m_cNoteBar.GetHwnd() ){
+		::ShowWindow( m_cNoteBar.GetHwnd(), nCmdShow );	// 【自前改造】ノートバー
 	}
 
 	if( bAdjust )
@@ -1987,6 +2050,9 @@ LRESULT CEditWnd::DispatchEvent(
 				break;
 			case MYBCN_MINIMAP:
 				LayoutMiniMap();
+				break;
+			case MYBCN_NOTEBAR:
+				LayoutNoteBar();	// 【自前改造】ノートバー
 				break;
 			default:
 				break;
@@ -3313,13 +3379,27 @@ LRESULT CEditWnd::OnSize2( WPARAM wParam, LPARAM lParam, bool bUpdateStatus )
 	if( m_pShareData->m_Common.m_sWindow.m_nFUNCKEYWND_Place == 0)
 		nTop += nFuncKeyWndHeight;
 	int nHeight = cy - nToolBarHeight - nFuncKeyWndHeight - nTabWndHeight - nTabHeightBottom - nStatusBarHeight;
+
+	// 【自前改造】ノートバー（左サイドバー）。いちばん左を占め、残りを他の子に配る
+	int nNoteBarWidth = 0;
+	if( m_cNoteBar.GetHwnd() ){
+		nNoteBarWidth = m_cNoteBar.GetBarWidth();
+		const int nLimit = cx - ::DpiScaleX( 80 );	// 本文が消えるほど太くしない
+		if( nNoteBarWidth > nLimit ){
+			nNoteBarWidth = ( 0 < nLimit )? nLimit: 0;
+		}
+		::MoveWindow( m_cNoteBar.GetHwnd(), 0, nTop, nNoteBarWidth, ( 0 < nHeight )? nHeight: 0, TRUE );
+	}
+	const int nLeft  = nNoteBarWidth;
+	const int cxRest = cx - nNoteBarWidth;
+
 	if( m_cDlgFuncList.GetHwnd() && m_cDlgFuncList.IsDocking() )
 	{
 		::MoveWindow(
 			m_cDlgFuncList.GetHwnd(),
-			(eDockSideFL == DOCKSIDE_RIGHT)? cx - nFuncListWidth: 0,
+			(eDockSideFL == DOCKSIDE_RIGHT)? cx - nFuncListWidth: nLeft,
 			(eDockSideFL == DOCKSIDE_BOTTOM)? nTop + nHeight - nFuncListHeight: nTop,
-			(eDockSideFL == DOCKSIDE_LEFT || eDockSideFL == DOCKSIDE_RIGHT)? nFuncListWidth: cx,
+			(eDockSideFL == DOCKSIDE_LEFT || eDockSideFL == DOCKSIDE_RIGHT)? nFuncListWidth: cxRest,
 			(eDockSideFL == DOCKSIDE_TOP || eDockSideFL == DOCKSIDE_BOTTOM)? nFuncListHeight: nHeight,
 			TRUE
 		);
@@ -3344,9 +3424,9 @@ LRESULT CEditWnd::OnSize2( WPARAM wParam, LPARAM lParam, bool bUpdateStatus )
 
 	::MoveWindow(
 		m_cSplitterWnd.GetHwnd(),
-		(eDockSideFL == DOCKSIDE_LEFT)? nFuncListWidth: 0,
+		(eDockSideFL == DOCKSIDE_LEFT)? nLeft + nFuncListWidth: nLeft,
 		(eDockSideFL == DOCKSIDE_TOP)? nTop + nFuncListHeight: nTop,	//@@@ 2003.05.31 MIK
-		((eDockSideFL == DOCKSIDE_LEFT || eDockSideFL == DOCKSIDE_RIGHT)? cx - nFuncListWidth: cx) - nMiniMapWidth,
+		((eDockSideFL == DOCKSIDE_LEFT || eDockSideFL == DOCKSIDE_RIGHT)? cxRest - nFuncListWidth: cxRest) - nMiniMapWidth,
 		(eDockSideFL == DOCKSIDE_TOP || eDockSideFL == DOCKSIDE_BOTTOM)? nHeight - nFuncListHeight: nHeight,	//@@@ 2003.05.31 MIK
 		TRUE
 	);

@@ -2749,6 +2749,7 @@ END
 STRINGTABLE
 BEGIN
     F_SHOWMINIMAP           "Hide/Show Mini Map"
+    F_SHOWNOTEBAR           "Hide/Show Note List"
     F_TYPE_LIST             "File type list"
     F_OPTION_TYPE           "File type settings"
     F_OPTION                "Common Settings"

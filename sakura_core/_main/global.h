@@ -62,6 +62,7 @@ enum EBarChangeNotifyType {
 	MYBCN_TAB		= 2,		//タブ
 	MYBCN_STATUSBAR	= 3,		//ステータスバー
 	MYBCN_MINIMAP	= 4,		//ミニマップ
+	MYBCN_NOTEBAR	= 5,		//【自前改造】ノートバー（左サイドバー）
 };
 //@@@ To Here 2003.05.31 MIK
 

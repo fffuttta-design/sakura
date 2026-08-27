@@ -595,6 +595,10 @@ void CShareData_IO::ShareData_IO_Common( CDataProfile& cProfile )
 	cProfile.IOProfileData( pszSecName, L"nMiniMapFontSize"		, common.m_sWindow.m_nMiniMapFontSize );
 	cProfile.IOProfileData( pszSecName, L"nMiniMapQuality"		, common.m_sWindow.m_nMiniMapQuality );
 	cProfile.IOProfileData( pszSecName, L"nMiniMapWidth"			, common.m_sWindow.m_nMiniMapWidth );
+	// 【自前改造】ノートバー（左サイドバー）
+	cProfile.IOProfileData( pszSecName, L"bDispNoteBar"			, common.m_sWindow.m_bDispNoteBar );
+	cProfile.IOProfileData( pszSecName, L"nNoteBarWidth"			, common.m_sWindow.m_nNoteBarWidth );
+	cProfile.IOProfileData( pszSecName, L"szNoteBarFolder"		, StringBufferW( common.m_sWindow.m_szNoteBarFolder ) );
 	cProfile.IOProfileData( pszSecName, L"bDarkMode"				, common.m_sWindow.m_bDarkMode );
 
 	cProfile.IOProfileData( pszSecName, L"bDispTabWnd"			, common.m_sTabBar.m_bDispTabWnd );	//タブウインドウ	//@@@ 2003.05.31 MIK
@@ -2131,6 +2135,8 @@ void CShareData_IO::ShareData_IO_MainMenu( CDataProfile& cProfile )
 		int nAddedOut = 1;
 		cProfile.IOProfileData( pszSecName, L"nDocumentMenuAdded", nAddedOut );
 		cProfile.IOProfileData( pszSecName, L"nVersionMenuAdded", nAddedOut );
+		cProfile.IOProfileData( pszSecName, L"nNoteBarMenuAdded", nAddedOut );
+		cProfile.IOProfileData( pszSecName, L"nNoteBarKeyAdded", nAddedOut );
 	}else{
 		CommonSetting_MainMenu& mainmenu = GetDllShareData().m_Common.m_sMainMenu;
 
@@ -2190,6 +2196,72 @@ void CShareData_IO::ShareData_IO_MainMenu( CDataProfile& cProfile )
 			pcItem->m_sKey[0]  = L'\0';
 			pcItem->m_sKey[1]  = L'\0';
 			mainmenu.m_nMainMenuNum++;
+		}
+
+		// 「ドキュメント」の先頭に「ノート一覧の表示／非表示」を足す（一度だけ）
+		{
+			int nAdded = 0;
+			cProfile.IOProfileData( pszSecName, L"nNoteBarMenuAdded", nAdded );
+			bool bExist = false;
+			for( int i = 0; i < mainmenu.m_nMainMenuNum; i++ ){
+				if( mainmenu.m_cMainMenuTbl[i].m_nFunc == F_SHOWNOTEBAR ){
+					bExist = true;
+					break;
+				}
+			}
+			if( 0 == nAdded && !bExist
+			 && mainmenu.m_nMainMenuNum + 2 <= int(std::size(mainmenu.m_cMainMenuTbl)) ){
+				// ドキュメント一覧の項目を探して、その手前に差し込む
+				int nPos = -1;
+				for( int i = 0; i < mainmenu.m_nMainMenuNum; i++ ){
+					if( mainmenu.m_cMainMenuTbl[i].m_nFunc == F_STASH_LIST
+					 && 0 < mainmenu.m_cMainMenuTbl[i].m_nLevel ){
+						nPos = i;
+						break;
+					}
+				}
+				if( 0 <= nPos ){
+					const int nLevel = mainmenu.m_cMainMenuTbl[nPos].m_nLevel;
+					for( int i = mainmenu.m_nMainMenuNum - 1; i >= nPos; i-- ){
+						mainmenu.m_cMainMenuTbl[i + 2] = mainmenu.m_cMainMenuTbl[i];
+					}
+					CMainMenu* pcItem = &mainmenu.m_cMainMenuTbl[nPos];
+					pcItem->m_nType    = T_LEAF;
+					pcItem->m_nFunc    = F_SHOWNOTEBAR;
+					pcItem->m_nLevel   = nLevel;
+					pcItem->m_sName[0] = L'\0';
+					pcItem->m_sKey[0]  = L'\0';
+					pcItem->m_sKey[1]  = L'\0';
+					CMainMenu* pcSep = &mainmenu.m_cMainMenuTbl[nPos + 1];
+					pcSep->m_nType    = T_SEPARATOR;
+					pcSep->m_nFunc    = F_0;
+					pcSep->m_nLevel   = nLevel;
+					pcSep->m_sName[0] = L'\0';
+					pcSep->m_sKey[0]  = L'\0';
+					pcSep->m_sKey[1]  = L'\0';
+					mainmenu.m_nMainMenuNum += 2;
+				}
+			}
+		}
+
+		// ノート一覧の開閉に Ctrl+Shift+B を割り当てる（一度だけ・空いていれば）
+		{
+			int nAdded = 0;
+			cProfile.IOProfileData( pszSecName, L"nNoteBarKeyAdded", nAdded );
+			if( 0 == nAdded ){
+				CommonSetting_KeyBind& keybind = GetDllShareData().m_Common.m_sKeyBind;
+				for( int i = 0; i < keybind.m_nKeyNameArrNum; i++ ){
+					KEYDATA& keydata = keybind.m_pKeyNameArr[i];
+					if( 'B' != keydata.m_nKeyCode ){
+						continue;
+					}
+					// [3] = Ctrl+Shift。既に何か割り当てられていたら触らない
+					if( F_0 == keydata.m_nFuncCodeArr[3] ){
+						keydata.m_nFuncCodeArr[3] = F_SHOWNOTEBAR;
+					}
+					break;
+				}
+			}
 		}
 
 		// トップレベルの索引を作り直す

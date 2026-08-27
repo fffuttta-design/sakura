@@ -2666,6 +2666,7 @@ END
 STRINGTABLE
 BEGIN
     F_SHOWMINIMAP           "显示/隐藏缩略图"
+    F_SHOWNOTEBAR           "隐藏/显示笔记列表"
     F_TYPE_LIST             "文件类型列表"
     F_OPTION_TYPE           "文件类型设置"
     F_OPTION                "通用设置"

@@ -31,6 +31,7 @@
 #include "_os/CDropTarget.h"
 #include "CMainToolBar.h"
 #include "CTabWnd.h"	//@@@ 2003.05.31 MIK
+#include "CNoteBar.h"	// 【自前改造】ノートバー（左サイドバー）
 #include "func/CFuncKeyWnd.h"
 #include "CMainStatusBar.h"
 #include "view/CEditView.h"
@@ -191,6 +192,10 @@ public:
 	void LayoutTabBar( void );			/* タブバーの配置処理 */			// 2006.12.19 ryoji
 	void LayoutStatusBar( void );		/* ステータスバーの配置処理 */		// 2006.12.19 ryoji
 	void LayoutMiniMap();				// ミニマップの配置処理
+	void LayoutNoteBar();				// 【自前改造】ノートバーの配置処理
+	void RelayoutClientArea();			// 【自前改造】今の大きさのまま中身を配置し直す
+	void RefreshNoteBar();				// 【自前改造】ノート一覧を作り直す
+	void NotifyNoteBarChanged();		// 【自前改造】幅の変更を全ウィンドウへ伝える
 	void EndLayoutBars( BOOL bAdjust = TRUE );	/* バーの配置終了処理 */	// 2006.12.19 ryoji
 
 	// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
@@ -362,6 +367,7 @@ public:
 	//子ウィンドウ
 	CMainToolBar	m_cToolbar{ this };			//!< ツールバー
 	CTabWnd			m_cTabWnd;			//!< タブウインドウ	//@@@ 2003.05.31 MIK
+	CNoteBar		m_cNoteBar;			//!< 【自前改造】ノートバー（左サイドバー）
 	CFuncKeyWnd		m_cFuncKeyWnd;		//!< ファンクションバー
 	CMainStatusBar	m_cStatusBar{ this };		//!< ステータスバー
 	CPrintPreviewHolder	m_pPrintPreview = nullptr;	//!< 印刷プレビュー表示情報。必要になったときのみインスタンスを生成する。

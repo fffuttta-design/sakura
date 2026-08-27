@@ -137,6 +137,11 @@ struct CommonSetting_Window
 	int				m_nMiniMapFontSize;
 	int				m_nMiniMapQuality;
 	int				m_nMiniMapWidth;
+
+	//【自前改造】ノートバー（左サイドバー）
+	BOOL			m_bDispNoteBar;					//!< ノートバーを表示する
+	int				m_nNoteBarWidth;				//!< ノートバーの幅（DPI補正前）
+	WCHAR			m_szNoteBarFolder[MAX_PATH];	//!< 一覧に出すフォルダー（空なら退避フォルダー）
 };
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //

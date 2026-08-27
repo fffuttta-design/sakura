@@ -280,6 +280,10 @@ bool CShareData::InitShareData()
 			sWindow.m_nMiniMapFontSize = -2;
 			sWindow.m_nMiniMapQuality = NONANTIALIASED_QUALITY;
 			sWindow.m_nMiniMapWidth = 150;
+			// 【自前改造】ノートバー（左サイドバー）は既定で出す
+			sWindow.m_bDispNoteBar = TRUE;
+			sWindow.m_nNoteBarWidth = 210;
+			sWindow.m_szNoteBarFolder[0] = L'\0';
 
 			sWindow.m_bSplitterWndHScroll = TRUE;	// 2001/06/20 asa-o 分割ウィンドウの水平スクロールの同期をとる
 			sWindow.m_bSplitterWndVScroll = TRUE;	// 2001/06/20 asa-o 分割ウィンドウの垂直スクロールの同期をとる

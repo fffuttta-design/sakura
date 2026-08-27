@@ -154,6 +154,28 @@ void CViewCommander::Command_SHOWMINIMAP( void )
 	);
 }
 
+/*! ノート一覧（左サイドバー）の表示/非表示
+
+	@date 2026/08/27 【自前改造】新規作成
+*/
+void CViewCommander::Command_SHOWNOTEBAR( void )
+{
+	CEditWnd*	pCEditWnd = GetEditWindow();
+
+	GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar =
+		((nullptr == pCEditWnd->m_cNoteBar.GetHwnd())? TRUE: FALSE);
+	pCEditWnd->LayoutNoteBar();
+	pCEditWnd->EndLayoutBars();
+
+	//全ウインドウに変更を通知する。
+	CAppNodeGroupHandle(0).PostMessageToAllEditors(
+		MYWM_BAR_CHANGE_NOTIFY,
+		(WPARAM)MYBCN_NOTEBAR,
+		(LPARAM)pCEditWnd->GetHwnd(),
+		pCEditWnd->GetHwnd()
+	);
+}
+
 /* タイプ別設定一覧 */
 void CViewCommander::Command_TYPE_LIST( void )
 {
