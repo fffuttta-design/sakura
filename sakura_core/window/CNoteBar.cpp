@@ -33,6 +33,7 @@ constexpr int NOTEBAR_PAD		= 6;	//!< 内側の余白
 constexpr int NOTEBAR_MIN_W		= 120;	//!< これより細くしない
 constexpr int NOTEBAR_MAX_W		= 600;	//!< これより太くしない
 constexpr int NOTEBAR_MAX_ITEMS	= 300;	//!< 一覧に出す上限
+constexpr int NOTEBAR_CLOSE_W	= 28;	//!< 右上の閉じるボタンの幅
 
 //! 一覧の子ウィンドウID
 constexpr int IDC_NOTEBAR_LIST	= 1001;
@@ -402,9 +403,25 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 	const int nHeader = ::DpiScaleY( NOTEBAR_HEADER_H );
 	const int nGrip   = ::DpiScaleX( NOTEBAR_GRIP_W );
 
-	// 上の「新しいメモ」の帯
-	RECT rcHeader = { rc.left, rc.top, rc.right - nGrip, rc.top + nHeader };
-	::MyFillRect( hdc, rcHeader, m_bHeaderDown ? clrEdge : (m_bHeaderHot ? clrBtn : clrBack) );
+	// 上の帯。左＝「＋ 新しいメモ」、右＝「×（閉じる）」
+	RECT rcHeader, rcClose;
+	GetHeaderRects( &rcHeader, &rcClose );
+	::MyFillRect( hdc, rcHeader, clrBack );
+	{
+		// 「新しいメモ」側だけを押した見た目にする（× の上に居るときは光らせない）
+		RECT rcNew = rcHeader;
+		rcNew.right = rcClose.left;
+		if( m_bHeaderDown ){
+			::MyFillRect( hdc, rcNew, clrEdge );
+		}else if( m_bHeaderHot ){
+			::MyFillRect( hdc, rcNew, clrBtn );
+		}
+	}
+	if( m_bCloseDown ){
+		::MyFillRect( hdc, rcClose, clrEdge );
+	}else if( m_bCloseHot ){
+		::MyFillRect( hdc, rcClose, clrBtn );
+	}
 	{
 		RECT rcLine = rcHeader;
 		rcLine.top = rcLine.bottom - ::DpiScaleY( 1 );
@@ -417,10 +434,26 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 		::SetTextColor( hdc, clrText );
 		RECT rcText = rcHeader;
 		rcText.left  += ::DpiScaleX( NOTEBAR_PAD );
-		rcText.right -= ::DpiScaleX( NOTEBAR_PAD );
+		rcText.right  = rcClose.left - ::DpiScaleX( 2 );
 		rcText.bottom -= ::DpiScaleY( 1 );
 		::DrawText( hdc, L"＋ 新しいメモ", -1, &rcText,
 			DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS | DT_NOPREFIX );
+		::RestoreDC( hdc, nSave );
+	}
+	{
+		// × は字ではなく線で描く（フォントに無い記号を選んで豆腐になるのを避ける）
+		const int nSave = ::SaveDC( hdc );
+		const int nArm  = ::DpiScaleX( 4 );
+		const int cxMid = (rcClose.left + rcClose.right) / 2;
+		const int cyMid = (rcClose.top + rcClose.bottom - ::DpiScaleY( 1 )) / 2;
+		const HPEN hPen = ::CreatePen( PS_SOLID, ::DpiScaleX( 1 ), clrText );
+		HPEN hOld = (HPEN)::SelectObject( hdc, hPen );
+		::MoveToEx( hdc, cxMid - nArm, cyMid - nArm, nullptr );
+		::LineTo(   hdc, cxMid + nArm + 1, cyMid + nArm + 1 );
+		::MoveToEx( hdc, cxMid + nArm, cyMid - nArm, nullptr );
+		::LineTo(   hdc, cxMid - nArm - 1, cyMid + nArm + 1 );
+		::SelectObject( hdc, hOld );
+		::DeleteObject( hPen );
 		::RestoreDC( hdc, nSave );
 	}
 
@@ -589,8 +622,9 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		return 0L;
 	case WM_MOUSELEAVE:
 		m_bTracking = false;
-		if( m_bHeaderHot ){
+		if( m_bHeaderHot || m_bCloseHot ){
 			m_bHeaderHot = false;
+			m_bCloseHot  = false;
 			::InvalidateRect( hwnd, nullptr, FALSE );
 		}
 		return 0L;
@@ -615,12 +649,39 @@ bool CNoteBar::IsInGrip( POINT ptClient ) const
 	return ( ptClient.x >= rc.right - ::DpiScaleX( NOTEBAR_GRIP_W ) );
 }
 
-bool CNoteBar::IsInHeader( POINT ptClient ) const
+/*! 上の帯の位置を出す
+
+	@param[out] pRcHeader 帯全体
+	@param[out] pRcClose  右端の「×」
+*/
+void CNoteBar::GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const
 {
 	RECT rc;
 	::GetClientRect( GetHwnd(), &rc );
-	return ( ptClient.y < ::DpiScaleY( NOTEBAR_HEADER_H )
-		  && ptClient.x < rc.right - ::DpiScaleX( NOTEBAR_GRIP_W ) );
+	RECT rcHeader = { rc.left, rc.top, rc.right - ::DpiScaleX( NOTEBAR_GRIP_W ),
+					  rc.top + ::DpiScaleY( NOTEBAR_HEADER_H ) };
+	int nClose = ::DpiScaleX( NOTEBAR_CLOSE_W );
+	if( nClose > rcHeader.right - rcHeader.left ){
+		nClose = rcHeader.right - rcHeader.left;
+	}
+	RECT rcClose = { rcHeader.right - nClose, rcHeader.top, rcHeader.right, rcHeader.bottom };
+	if( pRcHeader ) *pRcHeader = rcHeader;
+	if( pRcClose  ) *pRcClose  = rcClose;
+}
+
+//! 「＋ 新しいメモ」の上か（× の所は含めない）
+bool CNoteBar::IsInHeader( POINT ptClient ) const
+{
+	RECT rcHeader, rcClose;
+	GetHeaderRects( &rcHeader, &rcClose );
+	return ( FALSE != ::PtInRect( &rcHeader, ptClient ) && !::PtInRect( &rcClose, ptClient ) );
+}
+
+bool CNoteBar::IsInCloseBtn( POINT ptClient ) const
+{
+	RECT rcHeader, rcClose;
+	GetHeaderRects( &rcHeader, &rcClose );
+	return ( FALSE != ::PtInRect( &rcClose, ptClient ) );
 }
 
 int CNoteBar::HitTestList( POINT ptClient ) const
@@ -647,6 +708,12 @@ LRESULT CNoteBar::OnLButtonDown( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		m_nSizeOrgX     = pt.x;
 		m_nSizeOrgWidth = rc.right - rc.left;
 		::SetCapture( hwnd );
+		return 0L;
+	}
+	if( IsInCloseBtn( pt ) ){
+		m_bCloseDown = true;
+		::SetCapture( hwnd );
+		::InvalidateRect( hwnd, nullptr, FALSE );
 		return 0L;
 	}
 	if( IsInHeader( pt ) ){
@@ -685,9 +752,11 @@ LRESULT CNoteBar::OnMouseMove( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 			m_bTracking = true;
 		}
 	}
-	const bool bHot = IsInHeader( pt );
-	if( bHot != m_bHeaderHot ){
+	const bool bHot      = IsInHeader( pt );
+	const bool bCloseHot = IsInCloseBtn( pt );
+	if( bHot != m_bHeaderHot || bCloseHot != m_bCloseHot ){
 		m_bHeaderHot = bHot;
+		m_bCloseHot  = bCloseHot;
 		::InvalidateRect( hwnd, nullptr, FALSE );
 	}
 	return 0L;
@@ -702,6 +771,16 @@ LRESULT CNoteBar::OnLButtonUp( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		::ReleaseCapture();
 		// 幅は全ウィンドウ共通の設定なので、他の窓にも配置し直してもらう
 		GetEditWnd().NotifyNoteBarChanged();
+		return 0L;
+	}
+	if( m_bCloseDown ){
+		m_bCloseDown = false;
+		::ReleaseCapture();
+		::InvalidateRect( hwnd, nullptr, FALSE );
+		if( IsInCloseBtn( pt ) ){
+			// 閉じる＝表示の切り替えコマンドに任せる（設定の保存と他の窓への通知もやってくれる）
+			::PostMessageAny( GetParentHwnd(), WM_COMMAND, MAKEWPARAM( F_SHOWNOTEBAR, 0 ), (LPARAM)nullptr );
+		}
 		return 0L;
 	}
 	if( m_bHeaderDown ){

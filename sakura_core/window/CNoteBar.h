@@ -68,6 +68,8 @@ private:
 	int  HitTestList( POINT ptClient ) const;
 	bool IsInGrip( POINT ptClient ) const;
 	bool IsInHeader( POINT ptClient ) const;
+	bool IsInCloseBtn( POINT ptClient ) const;	//!< 右上の × の上か
+	void GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const;
 	void SelectCurrentDocument();			//!< 今開いている文書を選択状態にする
 
 	static void SplitNoteName( LPCWSTR pszPath, std::wstring* pStrTitle, std::wstring* pStrDate );
@@ -80,6 +82,8 @@ private:
 	int					m_nItemHeight	= 0;
 	bool				m_bHeaderHot	= false;
 	bool				m_bHeaderDown	= false;
+	bool				m_bCloseHot		= false;
+	bool				m_bCloseDown	= false;
 	bool				m_bSizing		= false;
 	int					m_nSizeOrgX		= 0;
 	int					m_nSizeOrgWidth	= 0;

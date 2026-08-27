@@ -162,10 +162,15 @@ void CViewCommander::Command_SHOWNOTEBAR( void )
 {
 	CEditWnd*	pCEditWnd = GetEditWindow();
 
-	GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar =
-		((nullptr == pCEditWnd->m_cNoteBar.GetHwnd())? TRUE: FALSE);
+	const BOOL bShow = ((nullptr == pCEditWnd->m_cNoteBar.GetHwnd())? TRUE: FALSE);
+	GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar = bShow;
 	pCEditWnd->LayoutNoteBar();
 	pCEditWnd->EndLayoutBars();
+
+	// 閉じたときは戻し方を知らせる（× で閉じると出し方が分からなくなるため）
+	if( !bShow ){
+		m_pCommanderView->SendStatusMessage( L"ノート一覧を閉じました（Ctrl+Shift+B で戻せます）" );
+	}
 
 	//全ウインドウに変更を通知する。
 	CAppNodeGroupHandle(0).PostMessageToAllEditors(
