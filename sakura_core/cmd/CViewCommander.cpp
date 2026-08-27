@@ -196,6 +196,7 @@ BOOL CViewCommander::HandleCommand(
 	case F_QUICK_STASH:			bRet = Command_QUICK_STASH(); break;	/* クイック退避 */
 	case F_QUICK_STASH_OPEN:	Command_QUICK_STASH_OPEN(); break;		/* 退避を開く */
 	case F_CHECK_UPDATE:		Command_CHECK_UPDATE(); break;			/* 今すぐ最新版を確認 */
+	case F_FILE_RENAME:			Command_FILE_RENAME(); break;			/* ファイル名の変更 */
 	case F_FILESAVECLOSE:
 		//	Feb. 28, 2004 genta 保存＆閉じる
 		//	保存が不要なら単に閉じる

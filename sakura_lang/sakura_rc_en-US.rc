@@ -2327,6 +2327,7 @@ BEGIN
     F_QUICK_STASH           "Quick stash"
     F_QUICK_STASH_OPEN      "Open stash..."
     F_CHECK_UPDATE          "Check for updates..."
+    F_FILE_RENAME           "Rename File..."
     F_FILE_REOPEN_LATIN1    "Re-Open as Latin1"
 END
 

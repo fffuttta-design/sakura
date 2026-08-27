@@ -2244,6 +2244,7 @@ BEGIN
     F_QUICK_STASH           "快速暂存"
     F_QUICK_STASH_OPEN      "打开暂存..."
     F_CHECK_UPDATE          "检查更新..."
+    F_FILE_RENAME           "重命名文件..."
     F_FILE_REOPEN_LATIN1    "以Latin1重新打开"
 END
 

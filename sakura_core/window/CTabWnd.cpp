@@ -133,6 +133,10 @@ LRESULT CTabWnd::TabWndDispatchEvent( [[maybe_unused]] HWND hwnd, UINT uMsg, WPA
 	case WM_LBUTTONUP:
 		return OnTabLButtonUp( wParam, lParam );
 
+	// 【自前改造】タブ名のダブルクリックでファイル名を変更する
+	case WM_LBUTTONDBLCLK:
+		return OnTabLButtonDblClk( wParam, lParam );
+
 	case WM_MOUSEMOVE:
 		return OnTabMouseMove( wParam, lParam );
 
@@ -300,6 +304,41 @@ LRESULT CTabWnd::OnTabLButtonUp( [[maybe_unused]] WPARAM wParam, LPARAM lParam )
 	}
 
 	BreakDrag();	// 2006.01.28 ryoji ドラッグ状態を解除する(関数化)
+
+	return 0L;
+}
+
+/*! タブ部 WM_LBUTTONDBLCLK 処理
+
+	【自前改造】タブ名をダブルクリックしたら、そのタブの文書のファイル名を変更する。
+	ダブルクリックの1回目のクリックでその窓に切り替わっているので、ここでは
+	「押されたタブを持っている窓」へコマンドを投げるだけでよい（窓＝プロセスが別なので投げっぱなしにする）。
+	タブの外（余白）でのダブルクリックは従来どおり新規作成にしたいので、素通しする。
+
+	@date 2026/08/25 【自前改造】新規作成
+*/
+LRESULT CTabWnd::OnTabLButtonDblClk( [[maybe_unused]] WPARAM wParam, LPARAM lParam )
+{
+	TCHITTESTINFO hitinfo;
+	hitinfo.pt.x = GET_X_LPARAM( lParam );
+	hitinfo.pt.y = GET_Y_LPARAM( lParam );
+	const int nTab = TabCtrl_HitTest( m_hwndTab, (LPARAM)&hitinfo );
+	if( 0 > nTab ){
+		return 1L;	// タブの上ではないので、既定の処理へ
+	}
+
+	BreakDrag();	// 1回目のクリックで始まったドラッグ判定を解除しておく
+
+	TCITEM tcitem;
+	tcitem.mask   = TCIF_PARAM;
+	tcitem.lParam = 0;
+	TabCtrl_GetItem( m_hwndTab, nTab, &tcitem );
+	HWND hwndTab = (HWND)tcitem.lParam;
+	if( nullptr == hwndTab || !::IsWindow( hwndTab ) ){
+		return 0L;
+	}
+
+	::PostMessageAny( hwndTab, WM_COMMAND, MAKEWPARAM( F_FILE_RENAME, 0 ), (LPARAM)nullptr );
 
 	return 0L;
 }

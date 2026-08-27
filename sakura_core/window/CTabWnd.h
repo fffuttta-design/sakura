@@ -102,6 +102,7 @@ protected:
 	/* サブクラス化した Tab でのメッセージ処理 */
 	LRESULT OnTabLButtonDown( WPARAM wParam, LPARAM lParam );	/*!< タブ部 WM_LBUTTONDOWN 処理 */
 	LRESULT OnTabLButtonUp( WPARAM wParam, LPARAM lParam );		/*!< タブ部 WM_LBUTTONUP 処理 */
+	LRESULT OnTabLButtonDblClk( WPARAM wParam, LPARAM lParam );	/*!< タブ部 WM_LBUTTONDBLCLK 処理（【自前改造】ファイル名の変更） */
 	LRESULT OnTabMouseMove( WPARAM wParam, LPARAM lParam );		/*!< タブ部 WM_MOUSEMOVE 処理 */
 	LRESULT OnTabTimer( WPARAM wParam, LPARAM lParam );			/*!< タブ部 WM_TIMER処理 */
 	LRESULT OnTabCaptureChanged( WPARAM wParam, LPARAM lParam );	/*!< タブ部 WM_CAPTURECHANGED 処理 */

@@ -26,6 +26,7 @@
 #include "dlg/CDlgProperty.h"
 #include "dlg/CDlgCancel.h"// 2002/2/8 hor
 #include "dlg/CDlgProfileMgr.h"
+#include "dlg/CDlgInput1.h"	// 【自前改造】ファイル名の変更（タブ名のダブルクリック）
 #include "doc/CDocReader.h"	//  Command_PROPERTY_FILE for _DEBUG
 #include "print/CPrintPreview.h"
 #include "io/CBinaryStream.h"
@@ -1151,4 +1152,103 @@ void CViewCommander::Command_CHECK_UPDATE( void )
 	}
 	// 更新スクリプトが全プロセスの終了を待っているので、速やかに全部閉じる
 	HandleCommand( F_EXITALL, true, 0, 0, 0, 0 );
+}
+
+/*!	ファイル名を変更する
+
+	タブ名をダブルクリックすると呼ばれる。置き場所は変えず、名前だけを聞いて改名する。
+	・**改名は保存を伴う**（新しい名前で保存してから、元のファイルを消す）。
+	  編集中の内容ごと新しい名前になるので、本人の意図とズレない。
+	・保存されていない文書（無題）は、退避フォルダーへその名前で保存する（改造①の延長）。
+	・拡張子を省いたら元の拡張子を引き継ぐ（うっかり .txt を落とさないため）。
+
+	@date 2026/08/25 【自前改造】新規作成
+*/
+void CViewCommander::Command_FILE_RENAME( void )
+{
+	CEditDoc* pcDoc = GetDocument();
+	const HWND hwndOwner = m_pCommanderView->GetHwnd();
+	const bool bNoName = !pcDoc->m_cDocFile.GetFilePathClass().IsValidPath();
+
+	WCHAR szFolder[_MAX_PATH] = L"";
+	WCHAR szOldName[_MAX_PATH] = L"";
+	std::wstring strOldPath;
+
+	if( bNoName ){
+		// まだ保存されていない文書は、退避フォルダーを置き場所にする
+		const std::wstring strDir = GetQuickStashDir();
+		if( strDir.empty() ){
+			// 置き場所が用意できないときは、従来どおり「名前を付けて保存」に逃がす
+			pcDoc->m_cDocFileOperation.FileSaveAs();
+			return;
+		}
+		wcscpy_s( szFolder, strDir.c_str() );
+	}else{
+		strOldPath = pcDoc->m_cDocFile.GetFilePath();
+		SplitPath_FolderAndFile( strOldPath.c_str(), szFolder, szOldName );
+	}
+
+	// 新しい名前を聞く（既定は今の名前）
+	WCHAR szName[_MAX_PATH];
+	wcscpy_s( szName, szOldName );
+	auto& cDlgInput1 = *CDlgInput1::getInstance();
+	if( !cDlgInput1.DoModal( G_AppInstance(), hwndOwner, L"ファイル名の変更",
+			L"新しいファイル名(&N)", _MAX_PATH - 1, szName ) ){
+		return;	// キャンセル
+	}
+
+	// 前後の空白と末尾のピリオドを落とす（Windows がファイル名に使えないため）
+	std::wstring strName = szName;
+	while( !strName.empty() && (L' ' == strName.front() || L'\t' == strName.front()) ){
+		strName.erase( strName.begin() );
+	}
+	while( !strName.empty() && (L' ' == strName.back() || L'\t' == strName.back() || L'.' == strName.back()) ){
+		strName.pop_back();
+	}
+	if( strName.empty() ){
+		return;
+	}
+	if( std::wstring::npos != strName.find_first_of( L"\\/:*?\"<>|" ) ){
+		ErrorMessage( hwndOwner, L"ファイル名に使えない文字が入っています。\n\\ / : * ? \" < > | は使えません。" );
+		return;
+	}
+
+	// 拡張子を省いたら元の拡張子を引き継ぐ（無題のときは .txt）
+	if( std::wstring::npos == strName.find( L'.' ) ){
+		const WCHAR* pszExt = wcsrchr( szOldName, L'.' );
+		strName += ( nullptr != pszExt ) ? pszExt : L".txt";
+	}
+
+	std::wstring strNewPath = szFolder;
+	if( !strNewPath.empty() && L'\\' != strNewPath.back() ){
+		strNewPath += L'\\';
+	}
+	strNewPath += strName;
+
+	if( 0 == _wcsicmp( strNewPath.c_str(), strOldPath.c_str() ) ){
+		return;	// 変わっていない
+	}
+	if( fexist( strNewPath.c_str() ) ){
+		ErrorMessage( hwndOwner, L"同じ名前のファイルが既にあります。\n%ls", strName.c_str() );
+		return;
+	}
+
+	// 新しい名前で保存する（この時点で文書は新しいファイルを指す）
+	if( !Command_FILESAVEAS( strNewPath.c_str(), EEolType::none ) ){
+		return;	// 保存できなかった。元のファイルはそのまま残す
+	}
+
+	// 元のファイルを片付ける。消せなくても保存自体は成功しているので、知らせるだけにする
+	if( !bNoName && !strOldPath.empty() && fexist( strOldPath.c_str() ) ){
+		if( !::DeleteFile( strOldPath.c_str() ) ){
+			WarningMessage( hwndOwner,
+				L"新しい名前で保存しましたが、元のファイルを消せませんでした。\n"
+				L"手で消してください。\n%ls", strOldPath.c_str() );
+			return;
+		}
+	}
+
+	std::wstring strMsg = L"名前を変更しました: ";
+	strMsg += strName;
+	m_pCommanderView->SendStatusMessage( strMsg.c_str() );
 }
