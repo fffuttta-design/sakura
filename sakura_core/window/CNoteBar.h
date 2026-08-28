@@ -69,7 +69,6 @@ private:
 	void RevealNote( int nIndex );
 	int  HitTestList( POINT ptClient ) const;
 	bool IsInGrip( POINT ptClient ) const;
-	bool IsInHeader( POINT ptClient ) const;
 	bool IsInCloseBtn( POINT ptClient ) const;	//!< 開閉ボタンの上か（畳んでいるときは帯全体）
 	void GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const;
 	void DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight, int nArmRaw ) const;	//!< ◀ ▶ を線で描く
@@ -83,8 +82,6 @@ private:
 	HFONT				m_hFontSub		= nullptr;
 	HBRUSH				m_hbrBack		= nullptr;
 	int					m_nItemHeight	= 0;
-	bool				m_bHeaderHot	= false;
-	bool				m_bHeaderDown	= false;
 	bool				m_bCloseHot		= false;
 	bool				m_bCloseDown	= false;
 	bool				m_bSizing		= false;

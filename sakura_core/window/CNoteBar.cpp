@@ -30,7 +30,7 @@
 namespace {
 
 //! 見た目の寸法（DPI補正前）
-constexpr int NOTEBAR_HEADER_H	= 30;	//!< 上の「新しいメモ」の帯の高さ
+constexpr int NOTEBAR_HEADER_H	= 30;	//!< 上の帯（畳むボタン）の高さ
 constexpr int NOTEBAR_GRIP_W	= 4;	//!< 右端の掴んで幅を変える所
 constexpr int NOTEBAR_PAD		= 6;	//!< 内側の余白
 constexpr int NOTEBAR_MIN_W		= 120;	//!< これより細くしない
@@ -232,8 +232,7 @@ void CNoteBar::ApplyCollapsed()
 	if( !GetHwnd() ){
 		return;
 	}
-	m_bHeaderHot = false;
-	m_bCloseHot  = false;
+	m_bCloseHot = false;
 	if( !IsCollapsed() ){
 		Refresh( true );
 	}
@@ -464,20 +463,10 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 		return 0L;
 	}
 
-	// 上の帯。左＝「＋ 新しいメモ」、右＝「◀（畳む）」
+	// 上の帯は「◀（畳む）」だけ。新しいメモはショートカットで作るのでボタンは置かない
 	RECT rcHeader, rcClose;
 	GetHeaderRects( &rcHeader, &rcClose );
 	::MyFillRect( hdc, rcHeader, clrBack );
-	{
-		// 「新しいメモ」側だけを押した見た目にする（× の上に居るときは光らせない）
-		RECT rcNew = rcHeader;
-		rcNew.right = rcClose.left;
-		if( m_bHeaderDown ){
-			::MyFillRect( hdc, rcNew, clrEdge );
-		}else if( m_bHeaderHot ){
-			::MyFillRect( hdc, rcNew, clrBtn );
-		}
-	}
 	if( m_bCloseDown ){
 		::MyFillRect( hdc, rcClose, clrEdge );
 	}else if( m_bCloseHot ){
@@ -487,19 +476,6 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 		RECT rcLine = rcHeader;
 		rcLine.top = rcLine.bottom - ::DpiScaleY( 1 );
 		::MyFillRect( hdc, rcLine, clrEdge );
-	}
-	{
-		const int nSave = ::SaveDC( hdc );
-		::SelectObject( hdc, m_hFontTitle );
-		::SetBkMode( hdc, TRANSPARENT );
-		::SetTextColor( hdc, clrText );
-		RECT rcText = rcHeader;
-		rcText.left  += ::DpiScaleX( NOTEBAR_PAD );
-		rcText.right  = rcClose.left - ::DpiScaleX( 2 );
-		rcText.bottom -= ::DpiScaleY( 1 );
-		::DrawText( hdc, L"＋ 新しいメモ", -1, &rcText,
-			DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS | DT_NOPREFIX );
-		::RestoreDC( hdc, nSave );
 	}
 	// 「◀」＝畳む。× ではなく向きのある印にして、畳んだ帯の「▶」と対にする
 	DrawChevron( hdc, rcClose, clrText, false, 4 );
@@ -674,9 +650,8 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		return 0L;
 	case WM_MOUSELEAVE:
 		m_bTracking = false;
-		if( m_bHeaderHot || m_bCloseHot ){
-			m_bHeaderHot = false;
-			m_bCloseHot  = false;
+		if( m_bCloseHot ){
+			m_bCloseHot = false;
 			::InvalidateRect( hwnd, nullptr, FALSE );
 		}
 		return 0L;
@@ -732,7 +707,7 @@ bool CNoteBar::IsInGrip( POINT ptClient ) const
 /*! 上の帯の位置を出す
 
 	@param[out] pRcHeader 帯全体
-	@param[out] pRcClose  右端の「×」
+	@param[out] pRcClose  右端の「◀（畳む）」
 */
 void CNoteBar::GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const
 {
@@ -747,17 +722,6 @@ void CNoteBar::GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const
 	RECT rcClose = { rcHeader.right - nClose, rcHeader.top, rcHeader.right, rcHeader.bottom };
 	if( pRcHeader ) *pRcHeader = rcHeader;
 	if( pRcClose  ) *pRcClose  = rcClose;
-}
-
-//! 「＋ 新しいメモ」の上か（開閉ボタンの所は含めない）
-bool CNoteBar::IsInHeader( POINT ptClient ) const
-{
-	if( IsCollapsed() ){
-		return false;
-	}
-	RECT rcHeader, rcClose;
-	GetHeaderRects( &rcHeader, &rcClose );
-	return ( FALSE != ::PtInRect( &rcHeader, ptClient ) && !::PtInRect( &rcClose, ptClient ) );
 }
 
 //! 開閉ボタンの上か。畳んでいるときは細い帯ぜんぶが「開く」ボタン
@@ -805,12 +769,6 @@ LRESULT CNoteBar::OnLButtonDown( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		::InvalidateRect( hwnd, nullptr, FALSE );
 		return 0L;
 	}
-	if( IsInHeader( pt ) ){
-		m_bHeaderDown = true;
-		::SetCapture( hwnd );
-		::InvalidateRect( hwnd, nullptr, FALSE );
-		return 0L;
-	}
 	return 0L;
 }
 
@@ -841,11 +799,9 @@ LRESULT CNoteBar::OnMouseMove( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 			m_bTracking = true;
 		}
 	}
-	const bool bHot      = IsInHeader( pt );
 	const bool bCloseHot = IsInCloseBtn( pt );
-	if( bHot != m_bHeaderHot || bCloseHot != m_bCloseHot ){
-		m_bHeaderHot = bHot;
-		m_bCloseHot  = bCloseHot;
+	if( bCloseHot != m_bCloseHot ){
+		m_bCloseHot = bCloseHot;
 		::InvalidateRect( hwnd, nullptr, FALSE );
 	}
 	return 0L;
@@ -869,16 +825,6 @@ LRESULT CNoteBar::OnLButtonUp( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		if( IsInCloseBtn( pt ) ){
 			// 閉じる＝表示の切り替えコマンドに任せる（設定の保存と他の窓への通知もやってくれる）
 			::PostMessageAny( GetParentHwnd(), WM_COMMAND, MAKEWPARAM( F_SHOWNOTEBAR, 0 ), (LPARAM)nullptr );
-		}
-		return 0L;
-	}
-	if( m_bHeaderDown ){
-		m_bHeaderDown = false;
-		::ReleaseCapture();
-		::InvalidateRect( hwnd, nullptr, FALSE );
-		if( IsInHeader( pt ) ){
-			// 新しいメモ＝新規作成（Ctrl+S で退避フォルダーへ入る）
-			::PostMessageAny( GetParentHwnd(), WM_COMMAND, MAKEWPARAM( F_FILENEW, 0 ), (LPARAM)nullptr );
 		}
 		return 0L;
 	}
