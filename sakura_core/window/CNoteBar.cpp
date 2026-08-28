@@ -11,6 +11,7 @@
 #include "doc/CDocListener.h"
 #include "dlg/CDlgInput1.h"
 #include "env/CShareData.h"
+#include "env/CAppNodeManager.h"
 #include "util/file.h"
 #include "util/quickstash.h"
 #include "util/window.h"
@@ -19,6 +20,7 @@
 #include "apiwrap/StdApi.h"
 #include "apiwrap/DarkMode.h"
 #include "_main/global.h"
+#include "config/system_constants.h"
 #include "_main/CControlTray.h"
 #include "Funccode_enum.h"
 
@@ -457,7 +459,7 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 		rcLine.left = rcLine.right - ::DpiScaleX( 1 );
 		::MyFillRect( hdc, rcLine, clrEdge );
 		RECT rcBtn = { rc.left, rc.top, rc.right - ::DpiScaleX( 1 ), rc.top + nHeader };
-		DrawChevron( hdc, rcBtn, clrText, true );
+		DrawChevron( hdc, rcBtn, clrText, true, 3 );
 		::EndPaint( hwnd, &ps );
 		return 0L;
 	}
@@ -500,7 +502,7 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 		::RestoreDC( hdc, nSave );
 	}
 	// 「◀」＝畳む。× ではなく向きのある印にして、畳んだ帯の「▶」と対にする
-	DrawChevron( hdc, rcClose, clrText, false );
+	DrawChevron( hdc, rcClose, clrText, false, 4 );
 
 	// 右端の掴む所
 	RECT rcGrip = { rc.right - nGrip, rc.top, rc.right, rc.bottom };
@@ -697,11 +699,12 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	字ではなく線で描く（フォントに無い記号を選んで豆腐になるのを避ける）。
 
 	@param bToRight true なら ▶（開く）、false なら ◀（畳む）
+	@param nArmRaw  大きさ（DPI補正前・横の半分の長さ。縦はこの2倍）
 */
-void CNoteBar::DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight ) const
+void CNoteBar::DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight, int nArmRaw ) const
 {
 	const int nSave = ::SaveDC( hdc );
-	const int nArm  = ::DpiScaleX( 4 );
+	const int nArm  = ::DpiScaleX( nArmRaw );
 	const int cxMid = (rcBtn.left + rcBtn.right) / 2;
 	const int cyMid = (rcBtn.top + rcBtn.bottom) / 2;
 	const int nTip  = bToRight ? (cxMid + nArm) : (cxMid - nArm);
@@ -1045,6 +1048,7 @@ void CNoteBar::RenameNote( int nIndex )
 		return;
 	}
 	Refresh( true );
+	GetEditWnd().NotifyNoteBarChanged();	// 他の窓の一覧にも新しい名前を届ける
 }
 
 /*! 消す（ごみ箱へ入れるので取り戻せる） */
@@ -1055,9 +1059,19 @@ void CNoteBar::DeleteNote( int nIndex )
 	}
 	const std::wstring strPath = m_vNotes[nIndex].strPath;
 
+	// 開いたままだと「消したのにタブに残っている」状態になるので、一緒に閉じる
+	HWND hwndOpened = nullptr;
+	if( !CShareData::getInstance()->IsPathOpened( strPath.c_str(), &hwndOpened ) ){
+		hwndOpened = nullptr;
+	}
+
 	std::wstring strMsg = L"「";
 	strMsg += m_vNotes[nIndex].strTitle;
-	strMsg += L"」をごみ箱へ移動します。\nよろしいですか？";
+	strMsg += L"」をごみ箱へ移動します。";
+	if( hwndOpened ){
+		strMsg += L"\n開いているタブも閉じます。";
+	}
+	strMsg += L"\nよろしいですか？";
 	if( IDYES != ::MessageBox( GetHwnd(), strMsg.c_str(), L"ノートの削除", MB_YESNO | MB_ICONQUESTION ) ){
 		return;
 	}
@@ -1075,8 +1089,30 @@ void CNoteBar::DeleteNote( int nIndex )
 	fos.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT;
 	if( 0 != ::SHFileOperation( &fos ) || fos.fAnyOperationsAborted ){
 		ErrorMessage( GetHwnd(), L"削除できませんでした。\n%ls", strPath.c_str() );
+		Refresh( true );
+		return;
+	}
+
+	// 消せたときだけタブを閉じる。
+	// ⚠ 自分がぶら下がっている窓のこともあるので、必ず Post（同期で呼ぶと自分を壊す）。
+	if( hwndOpened && ::IsWindow( hwndOpened ) ){
+		// 最後の1枚だったら窓ごと消さない。消すとサイドバーごと画面から無くなって
+		// 「削除したらエディタが終了した」ように見えるため、中身だけ(無題)に戻す。
+		EditNode* pEditNode = nullptr;
+		const int nOpened = CAppNodeManager::getInstance()->GetOpenedWindowArr( &pEditNode, FALSE );
+		delete[] pEditNode;
+		if( nOpened <= 1 ){
+			::PostMessage( hwndOpened, WM_COMMAND, MAKEWPARAM( F_FILECLOSE, 0 ), (LPARAM)nullptr );
+		}else{
+			// メニューの「閉じる」と同じ道（タブまとめ表示なら次のタブへ移ってから閉じる）
+			::PostMessage( hwndOpened, MYWM_CLOSE, 0,
+				(LPARAM)CAppNodeManager::getInstance()->GetNextTab( hwndOpened ) );
+		}
 	}
 	Refresh( true );
+	// 🔥 他の窓の一覧も作り直させる。ここを忘れると、別のタブには
+	//    消したはずのノートが残り続け、それを押して「開けない」と怒られる。
+	GetEditWnd().NotifyNoteBarChanged();
 }
 
 /*! エクスプローラーで場所を開く */

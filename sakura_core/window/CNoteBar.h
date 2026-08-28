@@ -72,7 +72,7 @@ private:
 	bool IsInHeader( POINT ptClient ) const;
 	bool IsInCloseBtn( POINT ptClient ) const;	//!< 開閉ボタンの上か（畳んでいるときは帯全体）
 	void GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const;
-	void DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight ) const;	//!< ◀ ▶ を線で描く
+	void DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight, int nArmRaw ) const;	//!< ◀ ▶ を線で描く
 	void SelectCurrentDocument();			//!< 今開いている文書を選択状態にする
 
 	static void SplitNoteName( LPCWSTR pszPath, std::wstring* pStrTitle, std::wstring* pStrDate );
