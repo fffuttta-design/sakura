@@ -36,7 +36,6 @@ constexpr int NOTEBAR_PAD		= 6;	//!< 内側の余白
 constexpr int NOTEBAR_MIN_W		= 120;	//!< これより細くしない
 constexpr int NOTEBAR_MAX_W		= 600;	//!< これより太くしない
 constexpr int NOTEBAR_MAX_ITEMS	= 300;	//!< 一覧に出す上限
-constexpr int NOTEBAR_CLOSE_W	= 28;	//!< 右上の開閉ボタンの幅
 constexpr int NOTEBAR_FOLD_W	= 16;	//!< 畳んだときに残す帯の幅（帯ぜんぶが「開く」ボタン）
 
 //! 一覧の子ウィンドウID
@@ -463,22 +462,17 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 		return 0L;
 	}
 
-	// 上の帯は「◀（畳む）」だけ。新しいメモはショートカットで作るのでボタンは置かない
-	RECT rcHeader, rcClose;
-	GetHeaderRects( &rcHeader, &rcClose );
-	::MyFillRect( hdc, rcHeader, clrBack );
-	if( m_bCloseDown ){
-		::MyFillRect( hdc, rcClose, clrEdge );
-	}else if( m_bCloseHot ){
-		::MyFillRect( hdc, rcClose, clrBtn );
-	}
+	// 上の帯ぜんぶが「◀（畳む）」ボタン。印は帯の真ん中に置く
+	RECT rcHeader;
+	GetHeaderRect( &rcHeader );
+	::MyFillRect( hdc, rcHeader, m_bCloseDown ? clrEdge : (m_bCloseHot ? clrBtn : clrBack) );
 	{
 		RECT rcLine = rcHeader;
 		rcLine.top = rcLine.bottom - ::DpiScaleY( 1 );
 		::MyFillRect( hdc, rcLine, clrEdge );
 	}
 	// 「◀」＝畳む。× ではなく向きのある印にして、畳んだ帯の「▶」と対にする
-	DrawChevron( hdc, rcClose, clrText, false, 4 );
+	DrawChevron( hdc, rcHeader, clrText, false, 4 );
 
 	// 右端の掴む所
 	RECT rcGrip = { rc.right - nGrip, rc.top, rc.right, rc.bottom };
@@ -620,8 +614,8 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				::SetCursor( ::LoadCursor( nullptr, IDC_SIZEWE ) );
 				return TRUE;
 			}
-			if( IsCollapsed() ){
-				// 帯ぜんぶが「開く」ボタンなので、押せると分かるようにする
+			if( IsInCloseBtn( pt ) ){
+				// 帯ぜんぶが開閉ボタンなので、押せると分かるようにする
 				::SetCursor( ::LoadCursor( nullptr, IDC_HAND ) );
 				return TRUE;
 			}
@@ -704,27 +698,20 @@ bool CNoteBar::IsInGrip( POINT ptClient ) const
 	return ( ptClient.x >= rc.right - ::DpiScaleX( NOTEBAR_GRIP_W ) );
 }
 
-/*! 上の帯の位置を出す
+/*! 上の帯（＝畳むボタン）の位置を出す
 
-	@param[out] pRcHeader 帯全体
-	@param[out] pRcClose  右端の「◀（畳む）」
+	@param[out] pRcHeader 帯全体（右端の掴む所は含めない）
 */
-void CNoteBar::GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const
+void CNoteBar::GetHeaderRect( RECT* pRcHeader ) const
 {
 	RECT rc;
 	::GetClientRect( GetHwnd(), &rc );
 	RECT rcHeader = { rc.left, rc.top, rc.right - ::DpiScaleX( NOTEBAR_GRIP_W ),
 					  rc.top + ::DpiScaleY( NOTEBAR_HEADER_H ) };
-	int nClose = ::DpiScaleX( NOTEBAR_CLOSE_W );
-	if( nClose > rcHeader.right - rcHeader.left ){
-		nClose = rcHeader.right - rcHeader.left;
-	}
-	RECT rcClose = { rcHeader.right - nClose, rcHeader.top, rcHeader.right, rcHeader.bottom };
 	if( pRcHeader ) *pRcHeader = rcHeader;
-	if( pRcClose  ) *pRcClose  = rcClose;
 }
 
-//! 開閉ボタンの上か。畳んでいるときは細い帯ぜんぶが「開く」ボタン
+//! 開閉ボタンの上か。開いているときは上の帯ぜんぶ、畳んでいるときは細い帯ぜんぶ
 bool CNoteBar::IsInCloseBtn( POINT ptClient ) const
 {
 	if( IsCollapsed() ){
@@ -732,9 +719,9 @@ bool CNoteBar::IsInCloseBtn( POINT ptClient ) const
 		::GetClientRect( GetHwnd(), &rc );
 		return ( FALSE != ::PtInRect( &rc, ptClient ) );
 	}
-	RECT rcHeader, rcClose;
-	GetHeaderRects( &rcHeader, &rcClose );
-	return ( FALSE != ::PtInRect( &rcClose, ptClient ) );
+	RECT rcHeader;
+	GetHeaderRect( &rcHeader );
+	return ( FALSE != ::PtInRect( &rcHeader, ptClient ) );
 }
 
 int CNoteBar::HitTestList( POINT ptClient ) const

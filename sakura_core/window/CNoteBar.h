@@ -69,8 +69,8 @@ private:
 	void RevealNote( int nIndex );
 	int  HitTestList( POINT ptClient ) const;
 	bool IsInGrip( POINT ptClient ) const;
-	bool IsInCloseBtn( POINT ptClient ) const;	//!< 開閉ボタンの上か（畳んでいるときは帯全体）
-	void GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const;
+	bool IsInCloseBtn( POINT ptClient ) const;	//!< 開閉ボタンの上か（上の帯ぜんぶ・畳んでいるときは細い帯ぜんぶ）
+	void GetHeaderRect( RECT* pRcHeader ) const;
 	void DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight, int nArmRaw ) const;	//!< ◀ ▶ を線で描く
 	void SelectCurrentDocument();			//!< 今開いている文書を選択状態にする
 
