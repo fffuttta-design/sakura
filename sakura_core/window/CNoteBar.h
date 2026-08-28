@@ -28,9 +28,11 @@ public:
 
 	void Refresh( bool bForce = false );				//!< 一覧を作り直す（中身が同じなら何もしない）
 	void UpdateTheme();									//!< ダークモード切替時のフォント・色の作り直し
+	void ApplyCollapsed();								//!< 開閉が切り替わったときの作り直し
 
 	int  GetBarWidth() const;							//!< 今の幅（ピクセル・DPI補正済み）
 
+	static bool IsCollapsed();							//!< 畳んである（細い帯だけ）か
 	static int  GetDefaultWidth();						//!< 既定の幅（DPI補正前）
 	static std::wstring GetNoteFolder();				//!< 一覧に出すフォルダー
 
@@ -68,8 +70,9 @@ private:
 	int  HitTestList( POINT ptClient ) const;
 	bool IsInGrip( POINT ptClient ) const;
 	bool IsInHeader( POINT ptClient ) const;
-	bool IsInCloseBtn( POINT ptClient ) const;	//!< 右上の × の上か
+	bool IsInCloseBtn( POINT ptClient ) const;	//!< 開閉ボタンの上か（畳んでいるときは帯全体）
 	void GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const;
+	void DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight ) const;	//!< ◀ ▶ を線で描く
 	void SelectCurrentDocument();			//!< 今開いている文書を選択状態にする
 
 	static void SplitNoteName( LPCWSTR pszPath, std::wstring* pStrTitle, std::wstring* pStrDate );

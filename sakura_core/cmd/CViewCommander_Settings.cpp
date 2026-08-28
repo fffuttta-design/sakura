@@ -162,14 +162,15 @@ void CViewCommander::Command_SHOWNOTEBAR( void )
 {
 	CEditWnd*	pCEditWnd = GetEditWindow();
 
-	const BOOL bShow = ((nullptr == pCEditWnd->m_cNoteBar.GetHwnd())? TRUE: FALSE);
+	// 🔥 畳んでも窓（細い帯）は残るので、今の状態は hwnd の有無ではなく設定で見る
+	const BOOL bShow = (GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar ? FALSE: TRUE);
 	GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar = bShow;
 	pCEditWnd->LayoutNoteBar();
 	pCEditWnd->EndLayoutBars();
 
-	// 閉じたときは戻し方を知らせる（× で閉じると出し方が分からなくなるため）
+	// 閉じたときは戻し方を知らせる（左端に残る ▶ を押せば開くが、気づきやすいように一言出す）
 	if( !bShow ){
-		m_pCommanderView->SendStatusMessage( L"ノート一覧を閉じました（Ctrl+Shift+B で戻せます）" );
+		m_pCommanderView->SendStatusMessage( L"ノート一覧を畳みました（左端の ▶ か Ctrl+Shift+B で開きます）" );
 	}
 
 	//全ウインドウに変更を通知する。

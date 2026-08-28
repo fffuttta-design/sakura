@@ -34,7 +34,8 @@ constexpr int NOTEBAR_PAD		= 6;	//!< 内側の余白
 constexpr int NOTEBAR_MIN_W		= 120;	//!< これより細くしない
 constexpr int NOTEBAR_MAX_W		= 600;	//!< これより太くしない
 constexpr int NOTEBAR_MAX_ITEMS	= 300;	//!< 一覧に出す上限
-constexpr int NOTEBAR_CLOSE_W	= 28;	//!< 右上の閉じるボタンの幅
+constexpr int NOTEBAR_CLOSE_W	= 28;	//!< 右上の開閉ボタンの幅
+constexpr int NOTEBAR_FOLD_W	= 16;	//!< 畳んだときに残す帯の幅（帯ぜんぶが「開く」ボタン）
 
 //! 一覧の子ウィンドウID
 constexpr int IDC_NOTEBAR_LIST	= 1001;
@@ -82,9 +83,22 @@ std::wstring CNoteBar::GetNoteFolder()
 	return GetQuickStashDir();
 }
 
+/*! 畳んである（細い帯だけ出ている）か
+
+	🔥 閉じても窓ごと消さず、幅 NOTEBAR_FOLD_W の帯だけ残す。
+	   そうしないと「閉じたあと開き直すボタン」が画面のどこにも無くなる。
+*/
+bool CNoteBar::IsCollapsed()
+{
+	return ( 0 == GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar );
+}
+
 /*! 今の幅（ピクセル・DPI補正済み） */
 int CNoteBar::GetBarWidth() const
 {
+	if( IsCollapsed() ){
+		return ::DpiScaleX( NOTEBAR_FOLD_W );
+	}
 	int nWidth = GetDllShareData().m_Common.m_sWindow.m_nNoteBarWidth;
 	if( nWidth < NOTEBAR_MIN_W ) nWidth = NOTEBAR_MIN_W;
 	if( nWidth > NOTEBAR_MAX_W ) nWidth = NOTEBAR_MAX_W;
@@ -207,6 +221,24 @@ void CNoteBar::DestroyFonts()
 	if( m_hbrBack    ){ ::DeleteObject( m_hbrBack    ); m_hbrBack    = nullptr; }
 }
 
+/*! 開閉が切り替わったときの作り直し
+
+	開いたときだけ一覧を読み直す（畳んでいる間はフォルダーを見に行かない）。
+*/
+void CNoteBar::ApplyCollapsed()
+{
+	if( !GetHwnd() ){
+		return;
+	}
+	m_bHeaderHot = false;
+	m_bCloseHot  = false;
+	if( !IsCollapsed() ){
+		Refresh( true );
+	}
+	LayoutChildren();
+	::InvalidateRect( GetHwnd(), nullptr, TRUE );
+}
+
 void CNoteBar::UpdateTheme()
 {
 	if( !GetHwnd() ){
@@ -291,6 +323,9 @@ void CNoteBar::Refresh( bool bForce )
 	if( !GetHwnd() || !m_hwndList ){
 		return;
 	}
+	if( IsCollapsed() ){
+		return;		// 畳んでいる間は見えないので、フォルダーを見に行くだけ無駄
+	}
 
 	// フォルダーを見に行くのは軽くないので、立て続けに呼ばれたら省く
 	const ULONGLONG ullNow = ::GetTickCount64();
@@ -366,6 +401,10 @@ void CNoteBar::LayoutChildren()
 	if( !GetHwnd() || !m_hwndList ){
 		return;
 	}
+	if( IsCollapsed() ){
+		::ShowWindow( m_hwndList, SW_HIDE );
+		return;
+	}
 	RECT rc;
 	::GetClientRect( GetHwnd(), &rc );
 	const int nHeader = ::DpiScaleY( NOTEBAR_HEADER_H );
@@ -373,6 +412,7 @@ void CNoteBar::LayoutChildren()
 	const int nW = rc.right - rc.left - nGrip;
 	const int nH = rc.bottom - rc.top - nHeader;
 	::MoveWindow( m_hwndList, 0, nHeader, (nW > 0)? nW: 0, (nH > 0)? nH: 0, TRUE );
+	::ShowWindow( m_hwndList, SW_SHOWNA );
 }
 
 /*! 親に配置し直してもらう */
@@ -404,7 +444,25 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 	const int nHeader = ::DpiScaleY( NOTEBAR_HEADER_H );
 	const int nGrip   = ::DpiScaleX( NOTEBAR_GRIP_W );
 
-	// 上の帯。左＝「＋ 新しいメモ」、右＝「×（閉じる）」
+	// 畳んであるときは細い帯だけ。帯ぜんぶが「▶（開く）」ボタン。
+	// 本文と同じ色だと「ただの余白」に見えて押せると気づけないので、ボタン色で塗る。
+	if( IsCollapsed() ){
+		auto blend = []( COLORREF a, COLORREF b ){
+			return RGB( (GetRValue(a) + GetRValue(b)) / 2,
+						(GetGValue(a) + GetGValue(b)) / 2,
+						(GetBValue(a) + GetBValue(b)) / 2 );
+		};
+		::MyFillRect( hdc, rc, m_bCloseDown ? clrEdge : (m_bCloseHot ? blend( clrBtn, clrEdge ) : clrBtn) );
+		RECT rcLine = rc;
+		rcLine.left = rcLine.right - ::DpiScaleX( 1 );
+		::MyFillRect( hdc, rcLine, clrEdge );
+		RECT rcBtn = { rc.left, rc.top, rc.right - ::DpiScaleX( 1 ), rc.top + nHeader };
+		DrawChevron( hdc, rcBtn, clrText, true );
+		::EndPaint( hwnd, &ps );
+		return 0L;
+	}
+
+	// 上の帯。左＝「＋ 新しいメモ」、右＝「◀（畳む）」
 	RECT rcHeader, rcClose;
 	GetHeaderRects( &rcHeader, &rcClose );
 	::MyFillRect( hdc, rcHeader, clrBack );
@@ -441,22 +499,8 @@ LRESULT CNoteBar::OnPaint( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 			DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS | DT_NOPREFIX );
 		::RestoreDC( hdc, nSave );
 	}
-	{
-		// × は字ではなく線で描く（フォントに無い記号を選んで豆腐になるのを避ける）
-		const int nSave = ::SaveDC( hdc );
-		const int nArm  = ::DpiScaleX( 4 );
-		const int cxMid = (rcClose.left + rcClose.right) / 2;
-		const int cyMid = (rcClose.top + rcClose.bottom - ::DpiScaleY( 1 )) / 2;
-		const HPEN hPen = ::CreatePen( PS_SOLID, ::DpiScaleX( 1 ), clrText );
-		HPEN hOld = (HPEN)::SelectObject( hdc, hPen );
-		::MoveToEx( hdc, cxMid - nArm, cyMid - nArm, nullptr );
-		::LineTo(   hdc, cxMid + nArm + 1, cyMid + nArm + 1 );
-		::MoveToEx( hdc, cxMid + nArm, cyMid - nArm, nullptr );
-		::LineTo(   hdc, cxMid - nArm - 1, cyMid + nArm + 1 );
-		::SelectObject( hdc, hOld );
-		::DeleteObject( hPen );
-		::RestoreDC( hdc, nSave );
-	}
+	// 「◀」＝畳む。× ではなく向きのある印にして、畳んだ帯の「▶」と対にする
+	DrawChevron( hdc, rcClose, clrText, false );
 
 	// 右端の掴む所
 	RECT rcGrip = { rc.right - nGrip, rc.top, rc.right, rc.bottom };
@@ -598,6 +642,11 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				::SetCursor( ::LoadCursor( nullptr, IDC_SIZEWE ) );
 				return TRUE;
 			}
+			if( IsCollapsed() ){
+				// 帯ぜんぶが「開く」ボタンなので、押せると分かるようにする
+				::SetCursor( ::LoadCursor( nullptr, IDC_HAND ) );
+				return TRUE;
+			}
 		}
 		break;
 	case WM_CONTEXTMENU:
@@ -643,8 +692,35 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	return CWnd::DispatchEvent( hwnd, uMsg, wParam, lParam );
 }
 
+/*! 「◀」「▶」を線で描く
+
+	字ではなく線で描く（フォントに無い記号を選んで豆腐になるのを避ける）。
+
+	@param bToRight true なら ▶（開く）、false なら ◀（畳む）
+*/
+void CNoteBar::DrawChevron( HDC hdc, const RECT& rcBtn, COLORREF clrLine, bool bToRight ) const
+{
+	const int nSave = ::SaveDC( hdc );
+	const int nArm  = ::DpiScaleX( 4 );
+	const int cxMid = (rcBtn.left + rcBtn.right) / 2;
+	const int cyMid = (rcBtn.top + rcBtn.bottom) / 2;
+	const int nTip  = bToRight ? (cxMid + nArm) : (cxMid - nArm);
+	const int nEnd  = bToRight ? (cxMid - nArm) : (cxMid + nArm);
+	const HPEN hPen = ::CreatePen( PS_SOLID, ::DpiScaleX( 2 ), clrLine );
+	HPEN hOld = (HPEN)::SelectObject( hdc, hPen );
+	::MoveToEx( hdc, nEnd, cyMid - nArm * 2, nullptr );
+	::LineTo(   hdc, nTip, cyMid );
+	::LineTo(   hdc, nEnd, cyMid + nArm * 2 );
+	::SelectObject( hdc, hOld );
+	::DeleteObject( hPen );
+	::RestoreDC( hdc, nSave );
+}
+
 bool CNoteBar::IsInGrip( POINT ptClient ) const
 {
+	if( IsCollapsed() ){
+		return false;	// 畳んでいるときは幅を変えられない（帯ぜんぶが開くボタン）
+	}
 	RECT rc;
 	::GetClientRect( GetHwnd(), &rc );
 	return ( ptClient.x >= rc.right - ::DpiScaleX( NOTEBAR_GRIP_W ) );
@@ -670,16 +746,25 @@ void CNoteBar::GetHeaderRects( RECT* pRcHeader, RECT* pRcClose ) const
 	if( pRcClose  ) *pRcClose  = rcClose;
 }
 
-//! 「＋ 新しいメモ」の上か（× の所は含めない）
+//! 「＋ 新しいメモ」の上か（開閉ボタンの所は含めない）
 bool CNoteBar::IsInHeader( POINT ptClient ) const
 {
+	if( IsCollapsed() ){
+		return false;
+	}
 	RECT rcHeader, rcClose;
 	GetHeaderRects( &rcHeader, &rcClose );
 	return ( FALSE != ::PtInRect( &rcHeader, ptClient ) && !::PtInRect( &rcClose, ptClient ) );
 }
 
+//! 開閉ボタンの上か。畳んでいるときは細い帯ぜんぶが「開く」ボタン
 bool CNoteBar::IsInCloseBtn( POINT ptClient ) const
 {
+	if( IsCollapsed() ){
+		RECT rc;
+		::GetClientRect( GetHwnd(), &rc );
+		return ( FALSE != ::PtInRect( &rc, ptClient ) );
+	}
 	RECT rcHeader, rcClose;
 	GetHeaderRects( &rcHeader, &rcClose );
 	return ( FALSE != ::PtInRect( &rcClose, ptClient ) );

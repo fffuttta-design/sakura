@@ -1024,13 +1024,12 @@ void CEditWnd::LayoutMiniMap( void )
 */
 void CEditWnd::LayoutNoteBar( void )
 {
-	if( m_pShareData->m_Common.m_sWindow.m_bDispNoteBar ){
-		if( nullptr == m_cNoteBar.GetHwnd() ){
-			m_cNoteBar.Open( G_AppInstance(), GetHwnd() );
-		}
-	}else{
-		m_cNoteBar.Close();
+	// 🔥 閉じても窓は壊さない。細い帯（▶）だけ残して、そこを押せば開き直せるようにする。
+	//    消してしまうと、開き直す手段がメニューとキー割り当てだけになって見つけられない。
+	if( nullptr == m_cNoteBar.GetHwnd() ){
+		m_cNoteBar.Open( G_AppInstance(), GetHwnd() );
 	}
+	m_cNoteBar.ApplyCollapsed();
 }
 
 /*! ノート一覧を作り直す
