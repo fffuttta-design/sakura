@@ -236,7 +236,8 @@ try {
     Set-Status '起動しています...' ''
     Start-Sleep -Milliseconds 400
     if (Test-Path $exe) {
-        Start-Process $exe | Out-Null
+        # 最小化で起こす＝前面を奪えない。タスクバーで点滅するので気づける
+        Start-Process $exe -WindowStyle Minimized | Out-Null
         Write-Log 'アプリを起動し直した（前面化なし）'
     }
     Start-Sleep -Milliseconds 400
