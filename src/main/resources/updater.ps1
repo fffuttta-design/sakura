@@ -5,7 +5,7 @@
 #   1. 「更新しています」の窓を出す
 #   2. アプリが全部終わるのを待つ（動いている exe は上書きできない）
 #   3. ファイルをコピーする（進捗バーを進める）
-#   4. アプリを起動し直して、窓を閉じる
+#   4. アプリを静かに起動し直して、窓を閉じる（前面には出さない）
 #
 # 自分自身も更新対象なので、呼び出し側が %TEMP% にコピーしてから起動する。
 # （導入先で直接動かすと、自分を上書きしようとして失敗する）
@@ -117,7 +117,9 @@ $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox     = $false
 $form.MinimizeBox     = $false
 $form.ControlBox      = $false          # 途中で閉じられると中途半端になるので × を出さない
-$form.TopMost         = $true
+# 🔥 前面を奪わない。更新のたびに窓が手前へ飛び出してくるのが邪魔だ、と本人から指摘（2026-08-28）。
+#    最前面固定もやめる（作業中のアプリの上に居座らない）。
+$form.TopMost         = $false
 
 $icon = Join-Path $DstDir 'sakura.exe'
 if (Test-Path $icon) {
@@ -145,7 +147,9 @@ $labelSub.Size        = New-Object System.Drawing.Size((Px 370), (Px 20))
 $labelSub.ForeColor   = [System.Drawing.Color]::Gray
 $form.Controls.Add($labelSub)
 
-$form.Show()
+# Show() だと焦点を奪うので、SW_SHOWNOACTIVATE(4) で「出すだけ」にする
+$null = $form.Handle                     # ハンドルを先に作らせる
+[SkrWin]::ShowWindow($form.Handle, 4) | Out-Null
 [System.Windows.Forms.Application]::DoEvents()
 
 function Set-Status([string]$main, [string]$sub) {
@@ -224,41 +228,16 @@ try {
 
     Write-Log 'コピー完了'
 
-    # --- 3. 起動し直して、前面に出す -----------------------------------------
-    # 裏で立ち上がると「気づいたら更新されていた」になるので、必ず手前に持ってくる。
+    # --- 3. 起動し直す（前面には出さない） -----------------------------------
+    # 🔥 以前は ForceForeground で必ず手前に出していた（裏で立ち上がると更新に気づけないため）。
+    #    が、更新のたびに窓が前へ飛び出してくるのが邪魔だと本人から指摘があったので、
+    #    静かに立ち上げるだけにした（2026-08-28）。更新されたかどうかは
+    #    タイトルバーの版番号と update.log で分かる。
     Set-Status '起動しています...' ''
     Start-Sleep -Milliseconds 400
     if (Test-Path $exe) {
-        $proc = Start-Process $exe -PassThru
-
-        # 🔥 前面に出せるのは「いま前面を持っているプロセス」だけ。
-        #    この時点で前面はこの進捗窓なので、その権利を新しいアプリへ譲っておく。
-        try { [SkrWin]::AllowSetForegroundWindow($proc.Id) | Out-Null } catch {}
-
-        # エディタの窓が出るまで待つ（制御プロセスが別に立つので PID は決め打ちしない）
-        $hwnd = [IntPtr]::Zero
-        for ($i = 0; $i -lt 60; $i++) {
-            $pids = @(Get-Process -Name 'sakura' -ErrorAction SilentlyContinue |
-                      Where-Object { $_.Path -like "$DstDir*" } |
-                      ForEach-Object { $_.Id })
-            if ($pids.Count -gt 0) {
-                $hwnd = [SkrWin]::FindMainWindow([int[]]$pids)
-                if ($hwnd -ne [IntPtr]::Zero) { break }
-            }
-            Start-Sleep -Milliseconds 250
-            [System.Windows.Forms.Application]::DoEvents()
-        }
-
-        if ($hwnd -ne [IntPtr]::Zero) {
-            # 進捗窓が最前面のままだとアプリを覆ってしまうので、先に降りる
-            $form.TopMost = $false
-            [System.Windows.Forms.Application]::DoEvents()
-
-            [SkrWin]::ForceForeground($hwnd)
-            Write-Log 'アプリを前面に出した'
-        } else {
-            Write-Log 'エディタの窓が見つからなかった（前面化なし）'
-        }
+        Start-Process $exe | Out-Null
+        Write-Log 'アプリを起動し直した（前面化なし）'
     }
     Start-Sleep -Milliseconds 400
 }
