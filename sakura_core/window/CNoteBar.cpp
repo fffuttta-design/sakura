@@ -19,6 +19,7 @@
 #include "apiwrap/StdApi.h"
 #include "apiwrap/DarkMode.h"
 #include "_main/global.h"
+#include "_main/CControlTray.h"
 #include "Funccode_enum.h"
 
 #include <algorithm>
@@ -823,9 +824,32 @@ void CNoteBar::OpenNote( int nIndex )
 		return;
 	}
 
-	SLoadInfo sLoadInfo( strPath.c_str(), CODE_AUTODETECT, false );
-	GetEditWnd().GetDocument()->m_cDocFileOperation.FileLoad( &sLoadInfo );
-	::SetFocus( GetEditWnd().GetActiveView().GetHwnd() );
+	// 🔥 開いたノートのタブへ焦点まで移す。
+	//    以前は無条件に FileLoad → 自分の窓へ SetFocus していたので、
+	//    別のタブ（＝別の窓）に開かれたときに焦点を自分へ奪い返してしまい、
+	//    「選んだのにタブが切り替わらない」状態になっていた。
+	//    タグジャンプ（CEditView_Command.cpp）と同じ順序に合わせる。
+	HWND hwndOwner = nullptr;
+	if( !CShareData::getInstance()->IsPathOpened( strPath.c_str(), &hwndOwner ) ){
+		// まだどこにも開いていない
+		if( pcDoc && pcDoc->IsAcceptLoad() ){
+			// この窓が空（無題・未編集）なので、ここに読む＝タブを増やさない
+			SLoadInfo sLoadInfo( strPath.c_str(), CODE_AUTODETECT, false );
+			pcDoc->m_cDocFileOperation.FileLoad( &sLoadInfo );
+			::SetFocus( GetEditWnd().GetActiveView().GetHwnd() );
+			SelectCurrentDocument();
+			return;
+		}
+		// この窓は埋まっているので新しいタブで開く（sync=true で起動を待つ）
+		SLoadInfo sLoadInfo( strPath.c_str(), CODE_AUTODETECT, false );
+		CControlTray::OpenNewEditor( G_AppInstance(), GetHwnd(), sLoadInfo, nullptr, true );
+		if( !CShareData::getInstance()->IsPathOpened( strPath.c_str(), &hwndOwner ) ){
+			return;	// 開けなかった（メッセージは開く側が出している）
+		}
+	}
+	if( hwndOwner ){
+		ActivateFrameWindow( hwndOwner );
+	}
 }
 
 /*! 右クリックメニュー */
