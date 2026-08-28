@@ -36,6 +36,8 @@ constexpr int NOTEBAR_PAD		= 6;	//!< 内側の余白
 constexpr int NOTEBAR_MIN_W		= 120;	//!< これより細くしない
 constexpr int NOTEBAR_MAX_W		= 600;	//!< これより太くしない
 constexpr int NOTEBAR_MAX_ITEMS	= 300;	//!< 一覧に出す上限
+constexpr UINT_PTR IDT_NOTEBAR_WAIT = 1;	//!< ドライブの接続待ちを見張るタイマー
+constexpr ULONG_PTR NOTEBAR_STATUS_ITEM = (ULONG_PTR)-1;	//!< 一覧の代わりに出す一言の目印
 constexpr int NOTEBAR_FOLD_W	= 16;	//!< 畳んだときに残す帯の幅（帯ぜんぶが「開く」ボタン）
 
 //! 一覧の子ウィンドウID
@@ -89,6 +91,19 @@ std::wstring CNoteBar::GetNoteFolder()
 	🔥 閉じても窓ごと消さず、幅 NOTEBAR_FOLD_W の帯だけ残す。
 	   そうしないと「閉じたあと開き直すボタン」が画面のどこにも無くなる。
 */
+/*! 一覧に出すフォルダーがまだ現れていない（ドライブの接続待ち）か
+
+	設定で決め打ちしたフォルダーが在るなら、それが正＝待ちではない。
+*/
+bool CNoteBar::IsFolderWaiting()
+{
+	const WCHAR* pszFolder = GetDllShareData().m_Common.m_sWindow.m_szNoteBarFolder;
+	if( pszFolder[0] != L'\0' && IsDirectory( pszFolder ) ){
+		return false;
+	}
+	return IsQuickStashDriveWaiting();
+}
+
 bool CNoteBar::IsCollapsed()
 {
 	return ( 0 == GetDllShareData().m_Common.m_sWindow.m_bDispNoteBar );
@@ -335,6 +350,26 @@ void CNoteBar::Refresh( bool bForce )
 	}
 	m_ullLastScan = ullNow;
 
+	// 🔥 Google ドライブは起動直後まだ生えていないことがある。
+	//    そのまま一覧を作ると「メモが0件」に見えてしまうので、
+	//    待ちだと分かるように一言出して、来るまで自分で見張る。
+	if( IsFolderWaiting() ){
+		ShowStatus( L"Google ドライブの接続待ち…", L"つながり次第ここに出ます" );
+		if( !m_bWaitTimer && ::SetTimer( GetHwnd(), IDT_NOTEBAR_WAIT, 2000, nullptr ) ){
+			m_bWaitTimer = true;
+		}
+		return;
+	}
+	if( m_bWaitTimer ){
+		::KillTimer( GetHwnd(), IDT_NOTEBAR_WAIT );
+		m_bWaitTimer = false;
+	}
+	if( !m_strStatus.empty() ){
+		m_strStatus.clear();
+		m_strStatusSub.clear();
+		bForce = true;	// 待ちが明けた直後は必ず作り直す
+	}
+
 	const std::wstring strDir = GetNoteFolder();
 	std::vector<std::wstring> vFiles = GetStashFilesInDir( strDir, NOTEBAR_MAX_ITEMS );
 
@@ -371,6 +406,33 @@ void CNoteBar::Refresh( bool bForce )
 		}
 	}
 	SelectCurrentDocument();
+	::SendMessage( m_hwndList, WM_SETREDRAW, TRUE, 0 );
+	::InvalidateRect( m_hwndList, nullptr, TRUE );
+}
+
+/*! 一覧の代わりに一言だけ出す
+
+	「0件」と「まだ読めていない」は見た目が同じで区別がつかないので、
+	理由をその場に出す。押しても何も起きない飾りの行にする。
+*/
+void CNoteBar::ShowStatus( LPCWSTR pszText, LPCWSTR pszSub )
+{
+	if( !m_hwndList ){
+		return;
+	}
+	if( m_strStatus == pszText && m_strStatusSub == pszSub ){
+		return;		// もう出ている（見張りタイマーで何度も来るのでちらつかせない）
+	}
+	m_strStatus    = pszText;
+	m_strStatusSub = pszSub;
+	m_vNotes.clear();
+	::SendMessage( m_hwndList, WM_SETREDRAW, FALSE, 0 );
+	::SendMessage( m_hwndList, LB_RESETCONTENT, 0, 0 );
+	const int nIdx = (int)::SendMessage( m_hwndList, LB_ADDSTRING, 0, (LPARAM)pszText );
+	if( 0 <= nIdx ){
+		::SendMessage( m_hwndList, LB_SETITEMDATA, nIdx, (LPARAM)NOTEBAR_STATUS_ITEM );
+	}
+	::SendMessage( m_hwndList, LB_SETCURSEL, (WPARAM)-1, 0 );
 	::SendMessage( m_hwndList, WM_SETREDRAW, TRUE, 0 );
 	::InvalidateRect( m_hwndList, nullptr, TRUE );
 }
@@ -520,6 +582,36 @@ LRESULT CNoteBar::OnDrawItem( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	if( !pdis || ODT_LISTBOX != pdis->CtlType || (UINT)-1 == pdis->itemID ){
 		return CWnd::OnDrawItem( hwnd, uMsg, wParam, lParam );
 	}
+	const bool bDarkNow    = IsDarkModeActive();
+	const COLORREF clrBase = bDarkNow ? DarkMode::getDlgBackgroundColor() : ::GetSysColor( COLOR_WINDOW );
+	const COLORREF clrGray = bDarkNow ? DarkMode::getEdgeColor()          : ::GetSysColor( COLOR_3DSHADOW );
+	if( NOTEBAR_STATUS_ITEM == pdis->itemData ){
+		// 一覧の代わりに出している一言（接続待ちなど）。選ばせない・押させない
+		::MyFillRect( pdis->hDC, pdis->rcItem, clrBase );
+		const int nSaveSt = ::SaveDC( pdis->hDC );
+		::SetBkMode( pdis->hDC, TRANSPARENT );
+		::SetTextColor( pdis->hDC, clrGray );
+		RECT rcSt = pdis->rcItem;
+		rcSt.left  += ::DpiScaleX( NOTEBAR_PAD + 3 );
+		rcSt.right -= ::DpiScaleX( NOTEBAR_PAD );
+		rcSt.top   += ::DpiScaleY( 4 );
+		::SelectObject( pdis->hDC, m_hFontTitle );
+		TEXTMETRIC tmSt;
+		::GetTextMetrics( pdis->hDC, &tmSt );
+		RECT rcStTitle = rcSt;
+		rcStTitle.bottom = rcStTitle.top + tmSt.tmHeight;
+		::DrawText( pdis->hDC, m_strStatus.c_str(), -1, &rcStTitle,
+			DT_SINGLELINE | DT_LEFT | DT_END_ELLIPSIS | DT_NOPREFIX );
+		if( !m_strStatusSub.empty() ){
+			::SelectObject( pdis->hDC, m_hFontSub );
+			RECT rcStSub = rcSt;
+			rcStSub.top = rcStTitle.bottom + ::DpiScaleY( 1 );
+			::DrawText( pdis->hDC, m_strStatusSub.c_str(), -1, &rcStSub,
+				DT_SINGLELINE | DT_LEFT | DT_END_ELLIPSIS | DT_NOPREFIX );
+		}
+		::RestoreDC( pdis->hDC, nSaveSt );
+		return TRUE;
+	}
 	const size_t nNote = (size_t)pdis->itemData;
 	if( m_vNotes.size() <= nNote ){
 		return TRUE;
@@ -642,6 +734,13 @@ LRESULT CNoteBar::DispatchEvent( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			ShowNoteMenu( nIndex, pt );
 		}
 		return 0L;
+	case WM_TIMER:
+		if( IDT_NOTEBAR_WAIT == (UINT_PTR)wParam ){
+			// ドライブが来たか見に行く。来ていれば Refresh の中で見張りを止める
+			Refresh( true );
+			return 0L;
+		}
+		break;
 	case WM_MOUSELEAVE:
 		m_bTracking = false;
 		if( m_bCloseHot ){
@@ -820,6 +919,10 @@ LRESULT CNoteBar::OnLButtonUp( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 LRESULT CNoteBar::OnDestroy( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
+	if( m_bWaitTimer ){
+		::KillTimer( hwnd, IDT_NOTEBAR_WAIT );
+		m_bWaitTimer = false;
+	}
 	m_hwndList = nullptr;
 	return 0L;
 }

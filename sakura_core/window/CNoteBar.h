@@ -35,6 +35,7 @@ public:
 	static bool IsCollapsed();							//!< 畳んである（細い帯だけ）か
 	static int  GetDefaultWidth();						//!< 既定の幅（DPI補正前）
 	static std::wstring GetNoteFolder();				//!< 一覧に出すフォルダー
+	static bool IsFolderWaiting();					//!< 一覧に出すフォルダーがまだ現れていない（ドライブの接続待ち）か
 
 protected:
 	/* 仮想関数 メッセージ処理 */
@@ -67,6 +68,7 @@ private:
 	void RenameNote( int nIndex );
 	void DeleteNote( int nIndex );
 	void RevealNote( int nIndex );
+	void ShowStatus( LPCWSTR pszText, LPCWSTR pszSub );	//!< 一覧の代わりに一言だけ出す（接続待ちなど）
 	int  HitTestList( POINT ptClient ) const;
 	bool IsInGrip( POINT ptClient ) const;
 	bool IsInCloseBtn( POINT ptClient ) const;	//!< 開閉ボタンの上か（上の帯ぜんぶ・畳んでいるときは細い帯ぜんぶ）
@@ -77,6 +79,8 @@ private:
 	static void SplitNoteName( LPCWSTR pszPath, std::wstring* pStrTitle, std::wstring* pStrDate );
 
 	std::vector<SNote>	m_vNotes;
+	std::wstring		m_strStatus;		//!< 一覧の代わりに出している一言（空なら普通の一覧）
+	std::wstring		m_strStatusSub;		//!< その下に小さく出す説明
 	HWND				m_hwndList		= nullptr;
 	HFONT				m_hFontTitle	= nullptr;
 	HFONT				m_hFontSub		= nullptr;
@@ -88,6 +92,7 @@ private:
 	int					m_nSizeOrgX		= 0;
 	int					m_nSizeOrgWidth	= 0;
 	bool				m_bTracking		= false;
+	bool				m_bWaitTimer	= false;	//!< 接続待ちの見張り（タイマー）を動かしているか
 	ULONGLONG			m_ullLastScan	= 0;	//!< 最後にフォルダーを見た時刻
 };
 

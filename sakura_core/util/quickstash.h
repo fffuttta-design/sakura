@@ -24,6 +24,14 @@
 */
 std::wstring GetQuickStashDir();
 
+//! Google ドライブがまだ現れていない（接続待ち）か
+/*!
+	@return 待っている最中なら true
+	@note この端末に Google ドライブが入っているのに候補ドライブが1つも見えない状態。
+	      「メモが0件」ではなく「まだ来ていないだけ」と区別するために使う
+*/
+bool IsQuickStashDriveWaiting();
+
 //! 退避したドキュメントを新しい順に取得する
 /*!
 	@param[in] nMax 取得する最大件数

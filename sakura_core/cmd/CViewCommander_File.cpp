@@ -1046,7 +1046,9 @@ bool CViewCommander::Command_QUICK_STASH( void )
 {
 	const std::wstring strPath = MakeQuickStashPath( GetDocument()->m_cDocLineMgr );
 	if( strPath.empty() ){
-		m_pCommanderView->SendStatusMessage( L"退避フォルダーを用意できませんでした" );
+		m_pCommanderView->SendStatusMessage( IsQuickStashDriveWaiting()
+			? L"Google ドライブの接続待ちです。つながってからもう一度どうぞ"
+			: L"退避フォルダーを用意できませんでした" );
 		return false;
 	}
 
@@ -1093,7 +1095,9 @@ void CViewCommander::Command_QUICK_STASH_OPEN( void )
 {
 	const std::wstring strDir = GetQuickStashDir();
 	if( strDir.empty() ){
-		m_pCommanderView->SendStatusMessage( L"退避フォルダーが見つかりません" );
+		m_pCommanderView->SendStatusMessage( IsQuickStashDriveWaiting()
+			? L"Google ドライブの接続待ちです。つながってからもう一度どうぞ"
+			: L"退避フォルダーが見つかりません" );
 		return;
 	}
 	// 末尾に \ を付けてフォルダーとして渡す

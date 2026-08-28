@@ -10,12 +10,42 @@
 
 #include <algorithm>
 
+namespace {
+//! 候補1: Google ドライブ（H: = contact@run-strategy.jp を優先。次に G: 個人、I: 家族）
+const WCHAR* const ppszDriveCandidates[] = { L"H:", L"G:", L"I:" };
+const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"SakuraEditorPlus", L"退避" };
+}	// namespace
+
+/*! Google ドライブがまだ現れていない（接続待ち）か
+
+	Windows にサインインした直後は、Google ドライブ（デスクトップ版）が
+	ドライブを生やすまでに少し時間がかかる。その間に退避フォルダーを探すと
+	「無い」ことになってしまう。
+	この端末に Google ドライブが入っているのに候補ドライブが1つも見えない
+	＝「まだ来ていないだけ」と見なして、待つ側に倒す。
+*/
+bool IsQuickStashDriveWaiting()
+{
+	for( const WCHAR* pszDrive : ppszDriveCandidates ){
+		std::wstring strPath = pszDrive;
+		strPath += L"\\";
+		strPath += ppszSubDirs[0];
+		if( IsDirectory( strPath.c_str() ) ){
+			return false;	// もう来ている
+		}
+	}
+	// そもそも Google ドライブが入っていない端末なら、いくら待っても来ない
+	WCHAR szLocal[_MAX_PATH];
+	if( 0 == ::GetEnvironmentVariable( L"LOCALAPPDATA", szLocal, _countof(szLocal) ) ){
+		return false;
+	}
+	std::wstring strDriveFs = szLocal;
+	strDriveFs += L"\\Google\\DriveFS";
+	return IsDirectory( strDriveFs.c_str() );
+}
+
 std::wstring GetQuickStashDir()
 {
-	// 候補1: Google ドライブ（H: = contact@run-strategy.jp を優先。次に G: 個人、I: 家族）
-	static const WCHAR* const ppszDriveCandidates[] = { L"H:", L"G:", L"I:" };
-	static const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"SakuraEditorPlus", L"退避" };
-
 	for( const WCHAR* pszDrive : ppszDriveCandidates ){
 		std::wstring strPath = pszDrive;
 		strPath += L"\\";
@@ -36,6 +66,13 @@ std::wstring GetQuickStashDir()
 		if( bOk ){
 			return strPath;
 		}
+	}
+
+	// 🔥 接続待ちのときはローカルへ逃がさない。
+	//    ここで逃がすと、あとからドライブが来たときに一覧へ出てこないメモが生まれる
+	//    （2026-08-28、空の「%USERPROFILE%\SakuraEditorPlus退避」ができていて発覚）
+	if( IsQuickStashDriveWaiting() ){
+		return std::wstring();
 	}
 
 	// 候補2: ユーザーフォルダー（Drive が無い端末でも動くように）
