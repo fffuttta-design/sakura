@@ -25,6 +25,7 @@
 #include "Funccode_enum.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <shellapi.h>
 
 namespace {
@@ -37,6 +38,9 @@ constexpr int NOTEBAR_MIN_W		= 120;	//!< これより細くしない
 constexpr int NOTEBAR_MAX_W		= 600;	//!< これより太くしない
 constexpr int NOTEBAR_MAX_ITEMS	= 300;	//!< 一覧に出す上限
 constexpr UINT_PTR IDT_NOTEBAR_WAIT = 1;	//!< ドライブの接続待ちを見張るタイマー
+constexpr UINT_PTR IDT_NOTEBAR_DRAG = 2;	//!< 掴んだまま端で止めたときに一覧を送るタイマー
+constexpr UINT   NOTEBAR_DRAG_SCROLL_MS = 90;	//!< その送る間隔
+constexpr UINT_PTR NOTEBAR_LIST_SUBCLASS = 1;	//!< 一覧を横取りするときの目印
 constexpr ULONG_PTR NOTEBAR_STATUS_ITEM = (ULONG_PTR)-1;	//!< 一覧の代わりに出す一言の目印
 constexpr int NOTEBAR_FOLD_W	= 16;	//!< 畳んだときに残す帯の幅（帯ぜんぶが「開く」ボタン）
 
@@ -53,6 +57,7 @@ enum ENoteMenu {
 	NOTEMENU_DELETE,
 	NOTEMENU_REVEAL,
 	NOTEMENU_FOLDER,
+	NOTEMENU_RESETORDER,
 };
 
 } // namespace
@@ -167,6 +172,10 @@ HWND CNoteBar::Open( HINSTANCE hInstance, HWND hwndParent )
 	);
 	if( m_hwndList ){
 		::SendMessage( m_hwndList, LB_SETITEMHEIGHT, 0, (LPARAM)m_nItemHeight );
+		// 🔥 ドラッグで並べ替えるために左ボタンを横取りする。
+		//    ダークモードの着せ替えも同じ一覧を subclass するが、鎖でつながるので共存できる
+		//    （こちらを先に掛けて、通す物は DefSubclassProc でそちらへ渡す）。
+		::SetWindowSubclass( m_hwndList, &ListProc, NOTEBAR_LIST_SUBCLASS, (DWORD_PTR)this );
 		if( IsDarkModeActive() ){
 			DarkMode::setChildCtrlsSubclassAndTheme( GetHwnd() );
 		}
@@ -185,6 +194,7 @@ void CNoteBar::Close()
 	}
 	m_hwndList = nullptr;
 	m_vNotes.clear();
+	m_vOrder.clear();
 	DestroyFonts();
 }
 
@@ -333,6 +343,187 @@ void CNoteBar::SplitNoteName( LPCWSTR pszPath, std::wstring* pStrTitle, std::wst
 	if( pStrDate  ) *pStrDate  = strDate;
 }
 
+namespace {
+
+//! フルパスからファイル名だけ取り出す
+std::wstring NoteFileName( const std::wstring& strPath )
+{
+	const size_t nPos = strPath.find_last_of( L"\\/" );
+	return ( std::wstring::npos == nPos ) ? strPath : strPath.substr( nPos + 1 );
+}
+
+} // namespace
+
+/*! 並び順の覚え書きの置き場所
+
+	一覧に出しているフォルダーの中に置く。∴ Google ドライブ越しに2台で同じ並びになる。
+*/
+std::wstring CNoteBar::GetOrderFilePath()
+{
+	const std::wstring strDir = GetNoteFolder();
+	if( strDir.empty() ){
+		return std::wstring();
+	}
+	std::wstring strPath = strDir;
+	if( L'\\' != strPath.back() ){
+		strPath += L'\\';
+	}
+	strPath += NOTEBAR_ORDER_FILE_NAME;
+	return strPath;
+}
+
+/*! 覚え書き（並び順ファイル）を読む
+
+	1行1ファイル名。`#` で始まる行と空行は読み飛ばす。
+	書くときは UTF-16LE だが、手で直されても困らないよう UTF-8 も読める。
+*/
+void CNoteBar::LoadOrder()
+{
+	m_vOrder.clear();
+
+	const std::wstring strPath = GetOrderFilePath();
+	if( strPath.empty() ){
+		return;
+	}
+	const HANDLE hFile = ::CreateFile( strPath.c_str(), GENERIC_READ,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
+	if( INVALID_HANDLE_VALUE == hFile ){
+		return;		// まだ並べ替えたことがない＝新しい順のまま
+	}
+	LARGE_INTEGER liSize;
+	std::vector<BYTE> vRaw;
+	if( ::GetFileSizeEx( hFile, &liSize ) && 0 < liSize.QuadPart && liSize.QuadPart < 1024 * 1024 ){
+		vRaw.resize( (size_t)liSize.QuadPart );
+		DWORD dwRead = 0;
+		if( !::ReadFile( hFile, &vRaw[0], (DWORD)vRaw.size(), &dwRead, nullptr ) ){
+			vRaw.clear();
+		}else{
+			vRaw.resize( dwRead );
+		}
+	}
+	::CloseHandle( hFile );
+	if( vRaw.empty() ){
+		return;
+	}
+
+	std::wstring strAll;
+	if( 2 <= vRaw.size() && 0xFF == vRaw[0] && 0xFE == vRaw[1] ){
+		strAll.assign( (const WCHAR*)(&vRaw[0] + 2), (vRaw.size() - 2) / sizeof(WCHAR) );
+	}else{
+		size_t nSkip = ( 3 <= vRaw.size() && 0xEF == vRaw[0] && 0xBB == vRaw[1] && 0xBF == vRaw[2] ) ? 3 : 0;
+		const int nLen = ::MultiByteToWideChar( CP_UTF8, 0, (LPCSTR)(&vRaw[0] + nSkip),
+			(int)(vRaw.size() - nSkip), nullptr, 0 );
+		if( 0 < nLen ){
+			strAll.resize( (size_t)nLen );
+			::MultiByteToWideChar( CP_UTF8, 0, (LPCSTR)(&vRaw[0] + nSkip),
+				(int)(vRaw.size() - nSkip), &strAll[0], nLen );
+		}
+	}
+
+	size_t nBegin = 0;
+	while( nBegin <= strAll.size() ){
+		size_t nEnd = strAll.find_first_of( L"\r\n", nBegin );
+		if( std::wstring::npos == nEnd ) nEnd = strAll.size();
+		std::wstring strLine = strAll.substr( nBegin, nEnd - nBegin );
+		nBegin = nEnd + 1;
+		while( !strLine.empty() && (L' ' == strLine.back() || L'\t' == strLine.back()) ){
+			strLine.pop_back();
+		}
+		if( !strLine.empty() && L'#' != strLine[0] ){
+			m_vOrder.push_back( strLine );
+		}
+		if( nEnd >= strAll.size() ){
+			break;
+		}
+	}
+}
+
+/*! 今の並びを覚え書きへ書く
+
+	画面に出ている順をそのまま書く＝1回でも並べ替えたら、その時点の全件が固定される。
+	以後に増えたメモだけが「新しい順」で上に積まれる。
+*/
+void CNoteBar::SaveOrder() const
+{
+	const std::wstring strPath = GetOrderFilePath();
+	if( strPath.empty() ){
+		return;
+	}
+
+	std::wstring strAll( 1, (WCHAR)0xFEFF );	// UTF-16LE の目印（BOM）。見えない字なので直に書かない
+	strAll += L"# SakuraEditorPlus ノートバーの並び順\r\n";
+	strAll += L"# ドラッグで並べ替えると自動で書き換わります。消すと「新しい順」に戻ります。\r\n";
+	for( const SNote& note : m_vNotes ){
+		strAll += NoteFileName( note.strPath );
+		strAll += L"\r\n";
+	}
+
+	// 隠しファイルのままだと開き直せないので、いったん属性を戻してから書く
+	::SetFileAttributes( strPath.c_str(), FILE_ATTRIBUTE_NORMAL );
+	const HANDLE hFile = ::CreateFile( strPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
+		nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
+	if( INVALID_HANDLE_VALUE == hFile ){
+		return;		// 書けなくても致命傷ではない（次に開いたら新しい順に戻るだけ）
+	}
+	DWORD dwWritten = 0;
+	::WriteFile( hFile, strAll.c_str(), (DWORD)(strAll.size() * sizeof(WCHAR)), &dwWritten, nullptr );
+	::CloseHandle( hFile );
+	// メモではないので一覧に出さない（名前でも弾いているが、念のため隠しにもする）
+	::SetFileAttributes( strPath.c_str(), FILE_ATTRIBUTE_HIDDEN );
+}
+
+/*! 覚え書きを捨てて「新しい順」に戻す */
+void CNoteBar::ResetOrder()
+{
+	const std::wstring strPath = GetOrderFilePath();
+	if( !strPath.empty() ){
+		::SetFileAttributes( strPath.c_str(), FILE_ATTRIBUTE_NORMAL );
+		::DeleteFile( strPath.c_str() );
+	}
+	m_vOrder.clear();
+	Refresh( true );
+	GetEditWnd().NotifyNoteBarChanged();
+}
+
+/*! 覚えた順に並べ替える
+
+	覚え書きに載っていないファイル（＝あとから増えたメモ）は、
+	新しい順のまま**先頭**へ置く。載っている物はその順で下に続く。
+*/
+void CNoteBar::ApplyOrder( std::vector<std::wstring>& vFiles ) const
+{
+	if( m_vOrder.empty() || vFiles.empty() ){
+		return;
+	}
+	std::vector<std::wstring> vKnown;		// 覚えている物（覚えた順）
+	std::vector<bool> vUsed( vFiles.size(), false );
+	vKnown.reserve( vFiles.size() );
+	for( const std::wstring& strName : m_vOrder ){
+		for( size_t i = 0; i < vFiles.size(); ++i ){
+			if( vUsed[i] ){
+				continue;
+			}
+			if( 0 == _wcsicmp( strName.c_str(), NoteFileName( vFiles[i] ).c_str() ) ){
+				vKnown.push_back( vFiles[i] );
+				vUsed[i] = true;
+				break;
+			}
+		}
+	}
+	if( vKnown.empty() ){
+		return;
+	}
+	std::vector<std::wstring> vNew;			// あとから増えた物（新しい順のまま）
+	vNew.reserve( vFiles.size() - vKnown.size() );
+	for( size_t i = 0; i < vFiles.size(); ++i ){
+		if( !vUsed[i] ){
+			vNew.push_back( vFiles[i] );
+		}
+	}
+	vFiles = vNew;
+	vFiles.insert( vFiles.end(), vKnown.begin(), vKnown.end() );
+}
+
 void CNoteBar::Refresh( bool bForce )
 {
 	if( !GetHwnd() || !m_hwndList ){
@@ -372,6 +563,10 @@ void CNoteBar::Refresh( bool bForce )
 
 	const std::wstring strDir = GetNoteFolder();
 	std::vector<std::wstring> vFiles = GetStashFilesInDir( strDir, NOTEBAR_MAX_ITEMS );
+
+	// 自分で並べ替えたことがあれば、その順を優先する（覚え書きが無ければ新しい順のまま）
+	LoadOrder();
+	ApplyOrder( vFiles );
 
 	// 中身が同じなら作り直さない（選択やスクロール位置を壊さないため）
 	if( !bForce && vFiles.size() == m_vNotes.size() ){
@@ -626,8 +821,11 @@ LRESULT CNoteBar::OnDrawItem( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	const COLORREF clrText   = bDark ? DarkMode::getTextColor()          : ::GetSysColor( COLOR_WINDOWTEXT );
 	const COLORREF clrSub    = bDark ? DarkMode::getEdgeColor()          : ::GetSysColor( COLOR_3DSHADOW );
 
+	// 掴んで動かしている1件。どれを持っているか分かるようにする
+	const bool bGrabbed = ( m_bDragging && (int)nNote == m_nDragFrom );
+
 	RECT rc = pdis->rcItem;
-	::MyFillRect( pdis->hDC, rc, bSelected ? clrSelBk : clrBack );
+	::MyFillRect( pdis->hDC, rc, (bSelected || bGrabbed) ? clrSelBk : clrBack );
 	if( bSelected ){
 		// 今開いているノート＝左端に帯
 		RECT rcAccent = rc;
@@ -638,6 +836,13 @@ LRESULT CNoteBar::OnDrawItem( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		RECT rcLine = rc;
 		rcLine.top = rcLine.bottom - ::DpiScaleY( 1 );
 		::MyFillRect( pdis->hDC, rcLine, clrBack );
+	}
+	if( bGrabbed ){
+		const HBRUSH hbrFrame = ::CreateSolidBrush( clrAccent );
+		if( hbrFrame ){
+			::FrameRect( pdis->hDC, &rc, hbrFrame );
+			::DeleteObject( hbrFrame );
+		}
 	}
 
 	const int nSave = ::SaveDC( pdis->hDC );
@@ -837,6 +1042,262 @@ int CNoteBar::HitTestList( POINT ptClient ) const
 	return ( 0 <= nIndex && (size_t)nIndex < m_vNotes.size() ) ? nIndex : -1;
 }
 
+/*! どこへ差し込むか（0〜件数）
+
+	1件の高さは固定（LBS_OWNERDRAWFIXED）なので、いちばん上に出ている位置から数えられる。
+	項目の上半分なら「その手前」、下半分なら「その次」＝掴んだ物を置く場所。
+*/
+int CNoteBar::HitTestInsert( POINT ptList ) const
+{
+	const int nCount = (int)m_vNotes.size();
+	if( nCount <= 0 || !m_hwndList || m_nItemHeight <= 0 ){
+		return 0;
+	}
+	const int nTop = (int)::SendMessage( m_hwndList, LB_GETTOPINDEX, 0, 0 );
+	// 上へはみ出したとき（y が負）も切り捨ての向きがずれないようにする
+	const int nRel = ( 0 <= ptList.y )
+		? ( ptList.y / m_nItemHeight )
+		: -( ( -ptList.y + m_nItemHeight - 1 ) / m_nItemHeight );
+	const int nFrac = ptList.y - nRel * m_nItemHeight;
+	int nInsert = nTop + nRel + ( ( nFrac > m_nItemHeight / 2 ) ? 1 : 0 );
+	if( nInsert < 0 )      nInsert = 0;
+	if( nInsert > nCount ) nInsert = nCount;
+	return nInsert;
+}
+
+/*! 差し込み位置が変わったら描き直す */
+void CNoteBar::SetDropAt( int nDropAt )
+{
+	if( nDropAt == m_nDropAt ){
+		return;
+	}
+	m_nDropAt = nDropAt;
+	if( m_hwndList ){
+		::InvalidateRect( m_hwndList, nullptr, FALSE );
+	}
+}
+
+/*! 差し込み位置の線を引く（項目を描いたあとに重ねる） */
+void CNoteBar::DrawInsertMark( HDC hdc ) const
+{
+	if( !m_bDragging || m_nDropAt < 0 || !m_hwndList || m_nItemHeight <= 0 ){
+		return;
+	}
+	RECT rc;
+	::GetClientRect( m_hwndList, &rc );
+	const int nTop   = (int)::SendMessage( m_hwndList, LB_GETTOPINDEX, 0, 0 );
+	const int nThick = ::DpiScaleY( 2 );
+	int y = ( m_nDropAt - nTop ) * m_nItemHeight;
+	if( y < rc.top )               y = rc.top;
+	if( y > rc.bottom - nThick )   y = rc.bottom - nThick;
+	RECT rcMark = { rc.left, y, rc.right, y + nThick };
+	::MyFillRect( hdc, rcMark, ::GetSysColor( COLOR_HIGHLIGHT ) );
+}
+
+/*! 端まで持っていったときに一覧を送る
+
+	マウスを動かさずに端で止めていても送りたいので、タイマーから呼ぶ。
+*/
+void CNoteBar::AutoScrollForDrag()
+{
+	if( !m_bDragging || !m_hwndList || m_nItemHeight <= 0 ){
+		return;
+	}
+	POINT pt;
+	::GetCursorPos( &pt );
+	::ScreenToClient( m_hwndList, &pt );
+	RECT rc;
+	::GetClientRect( m_hwndList, &rc );
+	const int nEdge = m_nItemHeight / 2;
+	const int nTop  = (int)::SendMessage( m_hwndList, LB_GETTOPINDEX, 0, 0 );
+	int nNewTop = nTop;
+	if( pt.y < rc.top + nEdge ){
+		nNewTop = nTop - 1;
+	}else if( pt.y > rc.bottom - nEdge ){
+		nNewTop = nTop + 1;
+	}
+	if( nNewTop != nTop ){
+		if( nNewTop < 0 ) nNewTop = 0;
+		if( nNewTop > (int)m_vNotes.size() - 1 ) nNewTop = (int)m_vNotes.size() - 1;
+		if( nNewTop != nTop ){
+			::SendMessage( m_hwndList, LB_SETTOPINDEX, (WPARAM)nNewTop, 0 );
+			::InvalidateRect( m_hwndList, nullptr, FALSE );
+		}
+	}
+	SetDropAt( HitTestInsert( pt ) );
+}
+
+/*! 掴んでいる状態を終える
+
+	@param bApply true なら並べ替えを反映する（離した）／false なら捨てる（中断）
+	@note 状態を先に消してから ReleaseCapture する。
+	      解放すると WM_CAPTURECHANGED でここへ戻ってくるので、そのとき何も起きないようにするため。
+*/
+void CNoteBar::EndDrag( bool bApply )
+{
+	const bool bWasDragging = m_bDragging;
+	const int  nFrom        = m_nDragFrom;
+	const int  nDropAt      = m_nDropAt;
+
+	if( m_bDragScroll && m_hwndList ){
+		::KillTimer( m_hwndList, IDT_NOTEBAR_DRAG );
+	}
+	m_bDragScroll = false;
+	m_bMayDrag    = false;
+	m_bDragging   = false;
+	m_nDragFrom   = -1;
+	m_nDropAt     = -1;
+
+	if( m_hwndList && ::GetCapture() == m_hwndList ){
+		::ReleaseCapture();
+	}
+	if( m_hwndList && bWasDragging ){
+		::InvalidateRect( m_hwndList, nullptr, FALSE );
+	}
+	if( bApply && bWasDragging && 0 <= nFrom && 0 <= nDropAt ){
+		MoveNote( nFrom, nDropAt );
+	}
+}
+
+/*! ドラッグの結果を反映する
+
+	@param nFrom     掴んだ位置
+	@param nInsertAt 差し込む位置（0〜件数。「その手前に入れる」という意味）
+*/
+void CNoteBar::MoveNote( int nFrom, int nInsertAt )
+{
+	const int nCount = (int)m_vNotes.size();
+	if( nFrom < 0 || nFrom >= nCount ){
+		return;
+	}
+	if( nInsertAt < 0 )      nInsertAt = 0;
+	if( nInsertAt > nCount ) nInsertAt = nCount;
+	// 自分より下へ入れるときは、自分が抜けるぶん1つ詰まる
+	const int nTo = ( nInsertAt > nFrom ) ? nInsertAt - 1 : nInsertAt;
+	if( nTo == nFrom ){
+		return;		// 動いていない
+	}
+
+	const SNote note = m_vNotes[nFrom];
+	m_vNotes.erase( m_vNotes.begin() + nFrom );
+	m_vNotes.insert( m_vNotes.begin() + nTo, note );
+
+	SaveOrder();
+	// 🔥 覚え書きを書いたら、必ず読み直した結果で画面を作り直す。
+	//    書けていなければ元の並びに戻る＝画面と実物が食い違ったままにならない。
+	Refresh( true );
+	GetEditWnd().NotifyNoteBarChanged();	// 他の窓の一覧も同じ並びにする
+}
+
+/*! 一覧（リストボックス）の横取り
+
+	並べ替えのために左ボタンを自分で見る。
+	🔥 押した時点では何もしない（開かない・選択も変えない）。
+	   ここで既定の処理へ流すと LBN_SELCHANGE が出て**押しただけで開いて**しまい、
+	   掴んで動かすことができなくなる。開くのは「動かさずに離した」ときだけ。
+*/
+LRESULT CALLBACK CNoteBar::ListProc( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam,
+	UINT_PTR uIdSubclass, DWORD_PTR dwRefData )
+{
+	CNoteBar* pThis = (CNoteBar*)dwRefData;
+	if( !pThis ){
+		return ::DefSubclassProc( hwnd, uMsg, wParam, lParam );
+	}
+
+	switch( uMsg ){
+	case WM_LBUTTONDOWN:
+		{
+			POINT pt = { (short)LOWORD( lParam ), (short)HIWORD( lParam ) };
+			const int nIndex = pThis->HitTestList( pt );
+			if( nIndex < 0 ){
+				break;		// 項目の外＝いつも通り
+			}
+			pThis->m_bMayDrag    = true;
+			pThis->m_bDragging   = false;
+			pThis->m_nDragFrom   = nIndex;
+			pThis->m_nDropAt     = -1;
+			pThis->m_ptDragStart = pt;
+			::SetCapture( hwnd );
+		}
+		return 0L;
+
+	case WM_LBUTTONDBLCLK:
+		// 1回目のクリックでもう開いている。既定へ流すと選択が動くだけなので握りつぶす
+		return 0L;
+
+	case WM_MOUSEMOVE:
+		if( pThis->m_bMayDrag ){
+			POINT pt = { (short)LOWORD( lParam ), (short)HIWORD( lParam ) };
+			if( !pThis->m_bDragging ){
+				// 少し動かすまでは「クリック」として扱う（押しただけで並びが変わらないように）
+				const int nDx = abs( pt.x - pThis->m_ptDragStart.x );
+				const int nDy = abs( pt.y - pThis->m_ptDragStart.y );
+				if( nDx < ::GetSystemMetrics( SM_CXDRAG ) && nDy < ::GetSystemMetrics( SM_CYDRAG ) ){
+					return 0L;
+				}
+				pThis->m_bDragging = true;
+				if( ::SetTimer( hwnd, IDT_NOTEBAR_DRAG, NOTEBAR_DRAG_SCROLL_MS, nullptr ) ){
+					pThis->m_bDragScroll = true;
+				}
+				::SetCursor( ::LoadCursor( nullptr, IDC_SIZENS ) );
+				::InvalidateRect( hwnd, nullptr, FALSE );
+			}
+			pThis->SetDropAt( pThis->HitTestInsert( pt ) );
+			return 0L;
+		}
+		break;
+
+	case WM_SETCURSOR:
+		if( pThis->m_bDragging ){
+			::SetCursor( ::LoadCursor( nullptr, IDC_SIZENS ) );
+			return TRUE;
+		}
+		break;
+
+	case WM_TIMER:
+		if( IDT_NOTEBAR_DRAG == (UINT_PTR)wParam ){
+			pThis->AutoScrollForDrag();
+			return 0L;
+		}
+		break;
+
+	case WM_LBUTTONUP:
+		if( pThis->m_bMayDrag ){
+			const bool bWasDragging = pThis->m_bDragging;
+			const int  nFrom        = pThis->m_nDragFrom;
+			pThis->EndDrag( true );
+			if( !bWasDragging && 0 <= nFrom ){
+				// 動かさずに離した＝ただのクリック。一覧の処理中に開くと入れ子になるので投げる
+				::PostMessage( pThis->GetHwnd(), WM_NOTEBAR_OPEN, (WPARAM)nFrom, 0 );
+			}
+			return 0L;
+		}
+		break;
+
+	case WM_CAPTURECHANGED:
+		pThis->EndDrag( false );
+		break;
+
+	case WM_PAINT:
+		{
+			// 項目を先に描いてもらってから、差し込み位置の線を上に重ねる
+			const LRESULT lRes = ::DefSubclassProc( hwnd, uMsg, wParam, lParam );
+			if( pThis->m_bDragging ){
+				const HDC hdc = ::GetDC( hwnd );
+				if( hdc ){
+					pThis->DrawInsertMark( hdc );
+					::ReleaseDC( hwnd, hdc );
+				}
+			}
+			return lRes;
+		}
+
+	default:
+		break;
+	}
+	return ::DefSubclassProc( hwnd, uMsg, wParam, lParam );
+}
+
 LRESULT CNoteBar::OnLButtonDown( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	POINT pt = { (short)LOWORD( lParam ), (short)HIWORD( lParam ) };
@@ -923,6 +1384,11 @@ LRESULT CNoteBar::OnDestroy( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam 
 		::KillTimer( hwnd, IDT_NOTEBAR_WAIT );
 		m_bWaitTimer = false;
 	}
+	// 子より先に親の WM_DESTROY が来るので、ここならまだ一覧は生きている
+	if( m_hwndList && ::IsWindow( m_hwndList ) ){
+		EndDrag( false );
+		::RemoveWindowSubclass( m_hwndList, &ListProc, NOTEBAR_LIST_SUBCLASS );
+	}
 	m_hwndList = nullptr;
 	return 0L;
 }
@@ -991,6 +1457,12 @@ void CNoteBar::ShowNoteMenu( int nIndex, POINT ptScreen )
 		::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_REVEAL, L"エクスプローラーで表示(&E)" );
 	}
+	if( bHasItem ){
+		::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
+	}
+	// 自分で並べ替えたあと、元の「新しい順」へ戻す道を必ず残しておく
+	::AppendMenu( hMenu, MF_STRING | (m_vOrder.empty() ? MF_GRAYED : 0),
+		NOTEMENU_RESETORDER, L"並び順を新しい順に戻す(&R)" );
 	::AppendMenu( hMenu, MF_STRING, NOTEMENU_FOLDER, L"ノートのフォルダーを開く(&F)" );
 
 	const int nCmd = ::TrackPopupMenu( hMenu,
@@ -1003,6 +1475,13 @@ void CNoteBar::ShowNoteMenu( int nIndex, POINT ptScreen )
 	case NOTEMENU_RENAME:	RenameNote( nIndex );	break;
 	case NOTEMENU_DELETE:	DeleteNote( nIndex );	break;
 	case NOTEMENU_REVEAL:	RevealNote( nIndex );	break;
+	case NOTEMENU_RESETORDER:
+		if( IDYES == ::MessageBox( GetHwnd(),
+				L"自分で並べ替えた順を捨てて、新しい順に戻します。\nよろしいですか？",
+				L"並び順を戻す", MB_YESNO | MB_ICONQUESTION ) ){
+			ResetOrder();
+		}
+		break;
 	case NOTEMENU_FOLDER:
 		{
 			const std::wstring strDir = GetNoteFolder();
@@ -1083,6 +1562,12 @@ void CNoteBar::RenameNote( int nIndex )
 		ErrorMessage( GetHwnd(), L"名前を変更できませんでした。\n%ls", strOldPath.c_str() );
 		return;
 	}
+	// 自分で並べ替えているなら、覚え書きの名前も差し替える。
+	// ここを忘れると、名前を変えたとたんに「知らないメモ」扱いで一番上へ飛ぶ。
+	if( !m_vOrder.empty() ){
+		m_vNotes[nIndex].strPath = strNewPath;
+		SaveOrder();
+	}
 	Refresh( true );
 	GetEditWnd().NotifyNoteBarChanged();	// 他の窓の一覧にも新しい名前を届ける
 }
@@ -1127,6 +1612,12 @@ void CNoteBar::DeleteNote( int nIndex )
 		ErrorMessage( GetHwnd(), L"削除できませんでした。\n%ls", strPath.c_str() );
 		Refresh( true );
 		return;
+	}
+
+	// 覚え書きからも外す（放っておいても読み飛ばされるが、消したものを溜めない）
+	if( !m_vOrder.empty() ){
+		m_vNotes.erase( m_vNotes.begin() + nIndex );
+		SaveOrder();
 	}
 
 	// 消せたときだけタブを閉じる。

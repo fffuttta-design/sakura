@@ -16,6 +16,14 @@
 #include <string>
 #include <vector>
 
+//! ノートバーの並び順を覚えているファイルの名前
+/*!
+	退避フォルダーの中に置くが、メモではないので一覧には出さない。
+	🔥 隠しファイル属性も付けているが、Google ドライブが別のPCへ配ったときに
+	   属性が落ちることがあるので、名前でも弾く（二重の備え）。
+*/
+constexpr const WCHAR* NOTEBAR_ORDER_FILE_NAME = L".notebar-order.txt";
+
 //! 退避フォルダーのパスを決めて、無ければ作る
 /*!
 	@return 退避フォルダーのフルパス。用意できなかったときは空文字列

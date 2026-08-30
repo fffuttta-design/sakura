@@ -175,6 +175,10 @@ std::vector<std::wstring> GetStashFilesInDir( const std::wstring& strDir, int nM
 		if( 0 != (fd.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) ){
 			continue;
 		}
+		// 並び順の覚え書きはメモではないので出さない
+		if( 0 == _wcsicmp( fd.cFileName, NOTEBAR_ORDER_FILE_NAME ) ){
+			continue;
+		}
 		SEntry e;
 		e.ftWrite  = fd.ftLastWriteTime;
 		if( !ParseStashNameTime( fd.cFileName, &e.ftSort ) ){
