@@ -20,6 +20,7 @@
 
 #include "StdAfx.h"
 #include "CViewCommander.h"
+#include "util/markdown.h"	// 【自前改造】Markdown の見出し判定
 #include "CViewCommander_inline.h"
 
 #include "view/CRuler.h"
@@ -141,6 +142,56 @@ end_of_for:;
 		else{
 			if( ! m_pCommanderView->IsInsMode() /* Oct. 2, 2005 genta */ ){
 				DelCharForOverwrite(&wcChar, 1);	// 上書き用の一文字削除	// 2009.04.11 ryoji
+			}
+		}
+	}
+
+	// 【自前改造】Markdown の見出しの行頭で改行したら、`#` ごと下へ送る
+	//   🔥 行頭の `#` は幅ゼロなので、レイアウト（画面の桁）では**その手前を指せない**。
+	//      サクラの編集は最終的にレイアウトの範囲で位置を決める（`ReplaceData_CLayoutMgr`）ので、
+	//      論理位置を渡しても効かない（2026-09-01、論理範囲を渡す道・2手に分ける道の
+	//      どちらも試して効かないことを確認済み）。
+	//      ∴ **ひとつ上の行の末尾**に改行を入れる。結果の文字列は同じで、`#` は動かさずに済む。
+	//   ⚠ 見出しが**ファイルの1行目**のときは「上の行」が無いので、この手は使えない。
+	//      その場合だけ今までどおり（`#` が上に残る）。
+	if( WCODE::IsLineDelimiter( wcChar, GetDllShareData().m_Common.m_sEdit.m_bEnableExtEol )
+	 && !m_pCommanderView->GetSelectionInfo().IsTextSelected()
+	 && GetDocument()->IsMarkdownDocument()
+	 && CLayoutInt(0) < GetCaret().GetCaretLayoutPos().GetY2() ){
+		const CLogicPoint ptCaretLogic = GetCaret().GetCaretLogicPos();
+		const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( ptCaretLogic.GetY2() );
+		if( nullptr != pcDocLine ){
+			CLogicInt nLen = CLogicInt(0);
+			const wchar_t* pLine = pcDocLine->GetDocLineStrWithEOL( &nLen );
+			int nTextStart = 0;
+			if( nullptr != pLine
+			 && MdParseHeading( pLine, (int)nLen, nullptr, &nTextStart )
+			 && ptCaretLogic.GetX2() <= nTextStart ){
+				CLayoutMgr& cLayoutMgr = GetDocument()->m_cLayoutMgr;
+				const CLayoutInt nPrevY = GetCaret().GetCaretLayoutPos().GetY2() - CLayoutInt(1);
+				CLogicInt nPrevLen = CLogicInt(0);
+				const CLayout* pcPrev = nullptr;
+				cLayoutMgr.GetLineStr( nPrevY, &nPrevLen, &pcPrev );
+				if( nullptr != pcPrev ){
+					// ひとつ上の行の末尾（改行の手前）に改行を入れる
+					CLayoutPoint ptTmp;
+					m_pCommanderView->InsertData_CEditView(
+						CLayoutPoint( pcPrev->CalcLayoutWidth( cLayoutMgr ), nPrevY ),
+						cmemDataW2.GetStringPtr(),
+						cmemDataW2.GetStringLength(),
+						&ptTmp,
+						true
+					);
+					// カーソルは下がった見出しの頭（＝記号の直後）へ
+					CLayoutPoint ptHead;
+					cLayoutMgr.LogicToLayout(
+						CLogicPoint( CLogicInt(nTextStart), ptCaretLogic.GetY2() + CLogicInt(1) ),
+						&ptHead
+					);
+					GetCaret().MoveCursor( ptHead, true );
+					GetCaret().m_nCaretPosX_Prev = GetCaret().GetCaretLayoutPos().GetX2();
+					return;
+				}
 			}
 		}
 	}
