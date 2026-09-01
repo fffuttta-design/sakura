@@ -480,8 +480,18 @@ void CEditView::SetCurrentColor( CGraphics& gr, EColorIndexType eColorIndex,  EC
 	sFont.m_sFontAttr = (info.m_sColorAttr.m_cTEXT != info.m_sColorAttr.m_cBACK) ? info.m_sFontAttr : info2.m_sFontAttr;
 	sFont.m_hFont = GetFontset().ChooseFontHandle( 0, sFont.m_sFontAttr );
 	// 【自前改造】Markdown の見出しは、行の高さいっぱいの大きい字で描く
+	//   🔥 **eColorIndex だけを見てはいけない。** 選択中・検索一致中は
+	//      そちらが「選択色」に差し替わり、本来の色は eColorIndex2 に入る。
+	//      片方しか見ないと、**選択した瞬間だけ見出しが本文の大きさに戻る**
+	//      （2026-09-01 本人から「選択したら戻る」と指摘）。
+	int nMdHeadLevel = 0;
 	if( COLORIDX_MDHEAD1 <= eColorIndex && eColorIndex <= COLORIDX_MDHEAD3 ){
-		const HFONT hHead = GetHeadingFont( (int)(eColorIndex - COLORIDX_MDHEAD1) + 1 );
+		nMdHeadLevel = (int)( eColorIndex - COLORIDX_MDHEAD1 ) + 1;
+	}else if( COLORIDX_MDHEAD1 <= eColorIndex2 && eColorIndex2 <= COLORIDX_MDHEAD3 ){
+		nMdHeadLevel = (int)( eColorIndex2 - COLORIDX_MDHEAD1 ) + 1;
+	}
+	if( 0 < nMdHeadLevel ){
+		const HFONT hHead = GetHeadingFont( nMdHeadLevel );
 		if( nullptr != hHead ){
 			sFont.m_hFont = hHead;
 		}
@@ -489,7 +499,7 @@ void CEditView::SetCurrentColor( CGraphics& gr, EColorIndexType eColorIndex,  EC
 	// 【自前改造】見出しの `#` 記号は背景と同じ色で描く＝見えなくする。
 	//   🔥 設定の色ではなく**そのとき実際に使う背景色**に合わせる。選択中や
 	//      カーソル行の背景でも確実に消えるようにするため。
-	if( COLORIDX_MDMARK == eColorIndex ){
+	if( COLORIDX_MDMARK == eColorIndex || COLORIDX_MDMARK == eColorIndex2 ){
 		gr.SetTextForeColor( bkcolor );
 	}
 	gr.SetMyFont(sFont);
