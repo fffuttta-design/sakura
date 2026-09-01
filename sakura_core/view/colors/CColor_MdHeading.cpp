@@ -11,25 +11,11 @@
 #include "types/CTypeSupport.h"
 #include "util/markdown.h"	// 【自前改造】拡張子の判定
 
-/*! 今開いているのが Markdown かを見ておく
-
-	ファイルを開き直したとき・タイプ別設定を変えたときに呼ばれる（CDocType 経由）。
-	∴ ここで拡張子を見ておけば、描画のたびに調べ直さなくてよい。
-*/
-void CColor_MdHeading::Update(void)
+//! 【自前改造】いま開いているのが Markdown か（正本を1か所だけ見る）
+bool MdIsCurrentDocMarkdown()
 {
-	CColorStrategy::Update();
-
-	m_bMarkdown = false;
 	const CEditDoc* pcDoc = CEditDoc::GetInstance(0);
-	if( nullptr == pcDoc ){
-		return;
-	}
-	const WCHAR* pszPath = pcDoc->m_cDocFile.GetFilePath();
-	if( nullptr == pszPath ){
-		return;
-	}
-	m_bMarkdown = IsMarkdownPath( pszPath );
+	return ( nullptr != pcDoc ) && pcDoc->IsMarkdownDocument();
 }
 
 namespace {
@@ -86,16 +72,6 @@ bool CColor_MdHeading::EndColor([[maybe_unused]] const CStringRef& cStr, int nPo
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 //                    見出しの `#` 記号                        //
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
-
-void CColor_MdMarker::Update(void)
-{
-	CColorStrategy::Update();
-	m_bMarkdown = false;
-	const CEditDoc* pcDoc = CEditDoc::GetInstance(0);
-	if( nullptr != pcDoc ){
-		m_bMarkdown = IsMarkdownPath( pcDoc->m_cDocFile.GetFilePath() );
-	}
-}
 
 bool CColor_MdMarker::BeginColor(const CStringRef& cStr, int nPos)
 {

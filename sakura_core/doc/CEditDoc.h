@@ -74,6 +74,18 @@ public:
 
 	//設定
 	void SetFilePathAndIcon(const WCHAR* szFile);	// Sep. 9, 2002 genta
+	//! 【自前改造】いま開いているのが Markdown か（この1個だけを見ること）
+	/*!
+		🔥 **拡張子をその場で調べる関数を各所に散らさない。**
+		   レイアウト（`#` を幅ゼロにする）・描画（`#` を飛ばす）・色分け・見出しフォントは、
+		   ぜんぶ**同じ答え**でないといけない。1つでも古い答えを持つと、
+		   文字は左に寄っているのにカーソルだけ右に残る、という壊れ方をする。
+		   ∴ 答えはここ1か所で持ち、`SetFilePathAndIcon()` で更新する。
+	*/
+	bool IsMarkdownDocument() const { return m_bMarkdown; }
+private:
+	bool				m_bMarkdown = false;	//!< 【自前改造】Markdown か（正本）
+public:
 
 	//属性
 	ECodeType	GetDocumentEncoding() const;				//!< ドキュメントの文字コードを取得

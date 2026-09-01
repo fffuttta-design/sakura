@@ -1078,8 +1078,10 @@ void CEditView::OnKillFocus( void )
 /*! いま開いているのが Markdown か（【自前改造】） */
 bool CEditView::IsMarkdownDocument() const
 {
+	// 🔥 正本は CEditDoc が1つだけ持つ。ここで拡張子を調べ直さない
+	//    （調べる場所が増えると必ず食い違い、カーソルだけずれる）。
 	const CEditDoc* pcDoc = CEditDoc::GetInstance(0);
-	return ( nullptr != pcDoc ) && IsMarkdownPath( pcDoc->m_cDocFile.GetFilePath() );
+	return ( nullptr != pcDoc ) && pcDoc->IsMarkdownDocument();
 }
 
 namespace {

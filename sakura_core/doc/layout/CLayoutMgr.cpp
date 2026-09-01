@@ -137,8 +137,7 @@ void CLayoutMgr::SetLayoutInfo(
 	//      レイアウトを作り直すきっかけ（読み込み・タイプ変更・拡張子の変更）は必ずここを通る。
 	{
 		const CEditDoc* pcDocForMd = CEditDoc::GetInstance(0);
-		m_bMdHeadingHide = ( nullptr != pcDocForMd )
-			&& IsMarkdownPath( pcDocForMd->m_cDocFile.GetFilePath() );
+		m_bMdHeadingHide = ( nullptr != pcDocForMd ) && pcDocForMd->IsMarkdownDocument();
 	}
 	m_nMaxLineKetas = nMaxLineKetas;
 	m_nTabSpace = nTabSpace;

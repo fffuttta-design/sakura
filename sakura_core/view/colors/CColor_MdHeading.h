@@ -16,6 +16,13 @@
 
 #include "view/colors/CColorStrategy.h"
 
+//! 【自前改造】いま開いているのが Markdown か（正本＝CEditDoc::IsMarkdownDocument）
+/*!
+	🔥 ここで拡張子を調べ直さない。判定を持つ場所が増えると必ず食い違い、
+	   「文字は左に寄っているのにカーソルだけ右」という壊れ方をする。
+*/
+bool MdIsCurrentDocMarkdown();
+
 class CColor_MdHeading final : public CColorStrategy{
 public:
 	//! @param nLevel 見出しの段（1〜3。3は「### 以下ぜんぶ」）
@@ -26,14 +33,12 @@ public:
 	bool BeginColor(const CStringRef& cStr, int nPos) override;
 	bool EndColor(const CStringRef& cStr, int nPos) override;
 	bool Disp() const override{
-		return m_bMarkdown && m_pTypeData->m_ColorInfoArr[m_eColorIndex].m_bDisp;
+		return MdIsCurrentDocMarkdown() && m_pTypeData->m_ColorInfoArr[m_eColorIndex].m_bDisp;
 	}
-	void Update(void) override;
 
 private:
 	int					m_nLevel;
 	EColorIndexType		m_eColorIndex;
-	bool				m_bMarkdown = false;	//!< 今開いているのが Markdown か
 	int					m_nEnd = 0;				//!< 色を終える位置
 };
 //! 見出しの `#` 記号を「見えなく」する
@@ -49,12 +54,10 @@ public:
 	bool BeginColor(const CStringRef& cStr, int nPos) override;
 	bool EndColor(const CStringRef& cStr, int nPos) override;
 	bool Disp() const override{
-		return m_bMarkdown && m_pTypeData->m_ColorInfoArr[COLORIDX_MDMARK].m_bDisp;
+		return MdIsCurrentDocMarkdown() && m_pTypeData->m_ColorInfoArr[COLORIDX_MDMARK].m_bDisp;
 	}
-	void Update(void) override;
 
 private:
-	bool	m_bMarkdown = false;
 	int		m_nEnd = 0;
 };
 

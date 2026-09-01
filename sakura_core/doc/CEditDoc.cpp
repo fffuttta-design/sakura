@@ -26,6 +26,7 @@
 #include "StdAfx.h"
 #include <wincodec.h>
 #include "doc/CEditDoc.h"
+#include "util/markdown.h"	// 【自前改造】Markdown 判定
 
 #include "cxx/com_pointer.hpp"
 #include "doc/logic/CDocLine.h" /// 2002/2/3 aroka
@@ -450,6 +451,12 @@ void CEditDoc::SetFilePathAndIcon(const WCHAR* szFile)
 	}
 	m_cDocFile.SetFilePath(szFile);
 	m_cDocType.SetDocumentIcon();
+
+	// 【自前改造】Markdown かどうかの正本をここで決める（パスが変わる唯一の場所）
+	//   🔥 レイアウトにもすぐ伝える。伝え忘れると「文字は左に寄っているのにカーソルだけ右」になる。
+	const bool bMdNew = IsMarkdownPath( m_cDocFile.GetFilePath() );
+	m_bMarkdown = bMdNew;
+	m_cLayoutMgr.SetMarkdownHeadingHide( bMdNew );
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
