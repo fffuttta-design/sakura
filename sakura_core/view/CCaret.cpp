@@ -542,8 +542,11 @@ void CCaret::ShowEditCaret()
 
 	/* キャレットの幅、高さを決定 */
 	// カーソルのタイプ = win
+	// 【自前改造】Markdown の見出しの行では、カーソルも見出しの文字の高さにそろえる
+	//   🔥 見出しだけ字を大きくしているので、そろえないとカーソルが短いまま取り残される。
+	const int nMdHeadHeight = m_pEditView->GetHeadingHeightAtCaret();
 	if( 0 == pCommon->m_sGeneral.GetCaretType() ){
-		nCaretHeight = GetHankakuHeight();					/* キャレットの高さ */
+		nCaretHeight = ( 0 < nMdHeadHeight ) ? nMdHeadHeight : GetHankakuHeight();	/* キャレットの高さ */
 		if( m_pEditView->IsInsMode() /* Oct. 2, 2005 genta */ ){
 			nCaretWidth = 2; //2px
 			// 2011.12.22 システムの設定に従う(けど2px以上)
@@ -579,11 +582,12 @@ void CCaret::ShowEditCaret()
 	}
 	// カーソルのタイプ = dos
 	else if( 1 == pCommon->m_sGeneral.GetCaretType() ){
+		const int nBaseHeight = ( 0 < nMdHeadHeight ) ? nMdHeadHeight : GetHankakuHeight();
 		if( m_pEditView->IsInsMode() /* Oct. 2, 2005 genta */ ){
-			nCaretHeight = GetHankakuHeight() / 2;			/* キャレットの高さ */
+			nCaretHeight = nBaseHeight / 2;					/* キャレットの高さ */
 		}
 		else{
-			nCaretHeight = GetHankakuHeight();				/* キャレットの高さ */
+			nCaretHeight = nBaseHeight;						/* キャレットの高さ */
 		}
 		nCaretWidth = GetHankakuDx();
 

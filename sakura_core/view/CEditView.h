@@ -114,6 +114,11 @@ public:
 	HFONT GetHeadingFont( int nLevel ) const {
 		return ( 1 <= nLevel && nLevel <= 3 ) ? m_hFontHeading[nLevel - 1] : nullptr;
 	}
+	//! 【自前改造】見出しの段（1〜3）の文字の高さ。見出しにしないときは 0
+	int CalcHeadingHeight( int nLevel ) const;
+	//! 【自前改造】カーソルのある行が見出しなら、その文字の高さ。違えば 0
+	//   カーソルの縦棒を見出しの大きさにそろえるため CCaret から呼ぶ
+	int GetHeadingHeightAtCaret() const;
 private:
 	void UpdateHeadingFonts();
 	bool IsMarkdownDocument() const;

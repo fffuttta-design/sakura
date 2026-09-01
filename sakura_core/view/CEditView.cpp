@@ -1113,6 +1113,57 @@ bool MdIsFontInstalled( const WCHAR* pszFace )
 
 } // namespace
 
+/*! 見出しの段ごとの文字の高さ（【自前改造】）
+
+	🔥 **高さを求める式はここだけ。** フォントを作るところとカーソルの高さで
+	   別々に計算すると、必ずどちらかがずれる（見出しは大きいのにカーソルだけ本文の高さ、など）。
+*/
+int CEditView::CalcHeadingHeight( int nLevel ) const
+{
+	if( nLevel < 1 || 3 < nLevel ){
+		return 0;
+	}
+	const int nCharH = GetTextMetrics().GetHankakuHeight();
+	const int nLineH = GetTextMetrics().GetHankakuDy();
+	if( nCharH <= 0 ){
+		return 0;
+	}
+	int nHeight = (int)( nCharH * MD_HEADING_SCALE[nLevel - 1] );
+	if( nHeight < nCharH ){
+		nHeight = nCharH;		// 本文より小さくはしない
+	}
+	if( nLineH < nHeight ){
+		nHeight = nLineH;		// 行からはみ出して上下が欠けないようにする
+	}
+	return nHeight;
+}
+
+/*! カーソルのある行が見出しなら、その文字の高さを返す（【自前改造】）
+
+	カーソルの縦棒を見出しの大きさにそろえるために使う。
+*/
+int CEditView::GetHeadingHeightAtCaret() const
+{
+	if( m_bMiniMap || !IsMarkdownDocument() ){
+		return 0;
+	}
+	CLogicInt nLineLen = CLogicInt(0);
+	const CLayout* pcLayout = nullptr;
+	const wchar_t* pLine = m_pcEditDoc->m_cLayoutMgr.GetLineStr(
+		GetCaret().GetCaretLayoutPos().GetY2(), &nLineLen, &pcLayout );
+	if( nullptr == pLine || nullptr == pcLayout ){
+		return 0;
+	}
+	if( 0 != pcLayout->GetLogicOffset() ){
+		return 0;	// 折り返した2行目以降は行頭ではない
+	}
+	int nLevel = 0;
+	if( !MdParseHeading( pLine, nLineLen, &nLevel, nullptr ) ){
+		return 0;
+	}
+	return CalcHeadingHeight( nLevel );
+}
+
 /*! 見出し用のフォントを作り直す（【自前改造】）
 
 	升目の高さ（文字の高さ＋行間）に収まる範囲で、段ごとに背を高くして**太字**にする。
@@ -1125,11 +1176,6 @@ void CEditView::UpdateHeadingFonts()
 	if( m_bMiniMap || !IsMarkdownDocument() ){
 		return;		// ミニマップと Markdown 以外は素のまま
 	}
-	const int nCharH  = GetTextMetrics().GetHankakuHeight();
-	const int nLineH  = GetTextMetrics().GetHankakuDy();
-	if( nCharH <= 0 ){
-		return;
-	}
 	const LOGFONT lf = GetFontset().GetLogfont();
 
 	// 見出しの書体。入っていなければ本文と同じ書体で我慢する
@@ -1137,12 +1183,9 @@ void CEditView::UpdateHeadingFonts()
 	static const bool bHasHeadFace = MdIsFontInstalled( MD_HEADING_FACE );
 
 	for( int i = 0; i < 3; ++i ){
-		int nHeight = (int)( nCharH * MD_HEADING_SCALE[i] );
-		if( nHeight < nCharH ){
-			nHeight = nCharH;		// 本文より小さくはしない
-		}
-		if( nLineH < nHeight ){
-			nHeight = nLineH;		// 行からはみ出して上下が欠けないようにする
+		const int nHeight = CalcHeadingHeight( i + 1 );	// 高さの式は1か所（CalcHeadingHeight）
+		if( nHeight <= 0 ){
+			continue;
 		}
 		LOGFONT lfHead = lf;
 		if( bHasHeadFace ){
