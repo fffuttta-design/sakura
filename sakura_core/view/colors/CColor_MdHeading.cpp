@@ -55,8 +55,15 @@ bool CColor_MdHeading::BeginColor(const CStringRef& cStr, int nPos)
 	if( nSharp <= 0 ){
 		return false;
 	}
-	// `#` のあとは空白が要る（`#hashtag` は見出しではない）。行末だけの `#` も見出しにしない
-	if( nSharp >= nLen || ( L' ' != pLine[nSharp] && L'\t' != pLine[nSharp] ) ){
+	// `#` だけの行は見出しにしない（見出しの文字が要る）
+	if( nSharp >= nLen ){
+		return false;
+	}
+	// 🔥 `#` のうしろの空白は要求しない。
+	//    Markdown の決まりでは空白が要るが、メモでは `#見出し` と詰めて書くのが普通で、
+	//    厳密にすると本人の書き方が色分けされない（2026-09-01 実際にそうなっていた）。
+	//    行頭でしか見ないので、文中のハッシュタグを拾う心配は無い。
+	if( L'\r' == pLine[nSharp] || L'\n' == pLine[nSharp] ){
 		return false;
 	}
 	// 4段目より下は3段目と同じ扱いにする（色を増やしても見分けが付かないため）

@@ -28,7 +28,10 @@ void CType_Text::InitTypeConfigImp(STypeConfig* pType)
 {
 	//名前と拡張子
 	wcscpy( pType->m_szTypeName, L"テキスト" );
-	wcscpy( pType->m_szTypeExts, L"txt,log,1st,err,ps" );
+	// 【自前改造】md も同じ扱いにする。別タイプにすると折り返し桁数などが食い違い、
+	//   .txt と .md で見た目が変わってしまう（見出しの色分けは拡張子で判定していて
+	//   タイプ別設定とは無関係なので、ここに入れても効き続ける）。
+	wcscpy( pType->m_szTypeExts, L"txt,md,markdown,log,1st,err,ps" );
 
 	//設定
 	pType->m_nMaxLineKetas = CKetaXInt(120);					/* 折り返し桁数 */
