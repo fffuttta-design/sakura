@@ -14,6 +14,7 @@
 #include "CColor_RegexKeyword.h"
 #include "CColor_Found.h"
 #include "CColor_Url.h"
+#include "CColor_MdHeading.h"	// 【自前改造】Markdown の見出し
 #include "CColor_Numeric.h"
 #include "CColor_KeywordSet.h"
 #include "CColor_Found.h"
@@ -178,6 +179,10 @@ CColorStrategyPool::CColorStrategyPool()
 	m_pcSelectStrategy = new CColor_Select();
 	m_pcFoundStrategy = new CColor_Found();
 //	m_vStrategies.push_back(new CColor_Found);				// マッチ文字列
+	// 【自前改造】Markdown の見出し。行ぜんぶを持っていくので、他より先に見る
+	m_vStrategies.push_back(new CColor_MdHeading(1, COLORIDX_MDHEAD1));
+	m_vStrategies.push_back(new CColor_MdHeading(2, COLORIDX_MDHEAD2));
+	m_vStrategies.push_back(new CColor_MdHeading(3, COLORIDX_MDHEAD3));
 	m_vStrategies.push_back(new CColor_RegexKeyword);		// 正規表現キーワード
 	m_vStrategies.push_back(new CColor_Heredoc);			// ヒアドキュメント
 	m_vStrategies.push_back(new CColor_BlockComment(COLORIDX_BLOCK1));	// ブロックコメント
@@ -328,6 +333,17 @@ void CColorStrategyPool::OnChangeSetting(void)
 			m_bSkipBeforeLayoutGeneral = false;
 		}
 	}
+	// 【自前改造】Markdown の見出しを色分けするときも、色分け前提の道を通す。
+	// （m_vStrategiesDisp に居る＝.md を開いていて、かつ「表示する」設定のときだけ）
+	if( m_bSkipBeforeLayoutGeneral ){
+		for( const CColorStrategy* pStrategy : m_vStrategiesDisp ){
+			const EColorIndexType eColor = pStrategy->GetStrategyColor();
+			if( COLORIDX_MDHEAD1 <= eColor && eColor <= COLORIDX_MDHEAD3 ){
+				m_bSkipBeforeLayoutGeneral = false;
+				break;
+			}
+		}
+	}
 	m_bSkipBeforeLayoutFound = true;
 	for(int n = COLORIDX_SEARCH; n <= COLORIDX_SEARCHTAIL; n++ ){
 		if( type.m_ColorInfoArr[n].m_bDisp ){
@@ -425,6 +441,9 @@ const SColorAttributeData g_ColorAttributeArr[] =
 	{L"DFD", 0},	//DIFF削除	//@@@ 2002.06.01 MIK
 	{L"MRK", 0},	//ブックマーク	// 02/10/16 ai Add
 	{L"PGV", COLOR_ATTRIB_NO_TEXT | COLOR_ATTRIB_NO_EFFECTS},
+	{L"MH1", 0},	//【自前改造】Markdown 見出し1
+	{L"MH2", 0},	//【自前改造】Markdown 見出し2
+	{L"MH3", 0},	//【自前改造】Markdown 見出し3
 	{L"LAST", 0}	// Not Used
 };
 

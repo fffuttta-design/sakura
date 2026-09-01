@@ -637,6 +637,9 @@
     <ClInclude Include="..\sakura_core\view\colors\CColor_Url.h">
       <Filter>Cpp Source Files\view\colors</Filter>
     </ClInclude>
+    <ClInclude Include="..\sakura_core\view\colors\CColor_MdHeading.h">
+      <Filter>Cpp Source Files\view\colors</Filter>
+    </ClInclude>
     <ClInclude Include="..\sakura_core\view\colors\CColorStrategy.h">
       <Filter>Cpp Source Files\view\colors</Filter>
     </ClInclude>
@@ -1751,6 +1754,9 @@
       <Filter>Cpp Source Files\view\colors</Filter>
     </ClCompile>
     <ClCompile Include="..\sakura_core\view\colors\CColor_Url.cpp">
+      <Filter>Cpp Source Files\view\colors</Filter>
+    </ClCompile>
+    <ClCompile Include="..\sakura_core\view\colors\CColor_MdHeading.cpp">
       <Filter>Cpp Source Files\view\colors</Filter>
     </ClCompile>
     <ClCompile Include="..\sakura_core\view\colors\CColorStrategy.cpp">

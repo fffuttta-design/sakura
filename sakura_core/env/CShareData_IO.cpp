@@ -1380,6 +1380,25 @@ void CShareData_IO::ShareData_IO_Types( CDataProfile& cProfile )
 			pShare->m_TypeMini[i].m_encoding = type.m_encoding;
 		}
 	}
+	// 🔥【自前改造】保存のたびに出る「改行コードが混在しています」を止める。
+	//    この設定はタイプ別なので、既に書かれている ini を読むと true に戻ってしまう。
+	//    ∴ 一度きりの引っ越しとして、全タイプの警告を切る。
+	//    （また出したくなったら「タイプ別設定 → 支援」で戻せる。切った印は ini に残るので
+	//      戻した設定を次の起動で潰すことはない）
+	if( !cProfile.IsReadingMode() ){
+		int nAppliedOut = 1;
+		cProfile.IOProfileData( L"Other", L"nEolMixWarnOffApplied", nAppliedOut );
+	}else{
+		int nApplied = 0;
+		cProfile.IOProfileData( L"Other", L"nEolMixWarnOffApplied", nApplied );
+		if( 0 == nApplied ){
+			for( i = 0; i < pShare->m_nTypesCount; ++i ){
+				types[i]->m_bChkEnterAtEnd = false;
+			}
+			pShare->m_TypeBasis.m_bChkEnterAtEnd = false;
+		}
+	}
+
 	if( cProfile.IsReadingMode() ){
 		// Id重複チェック、更新
 		for( i = 0; i < pShare->m_nTypesCount - 1; i++ ){

@@ -34,6 +34,7 @@
 #include "io/CTextStream.h"	// 【自前改造】クイック退避で使う
 #include "util/quickstash.h"	// 【自前改造】退避フォルダーの決定（メニュー側と共用）
 #include "util/updater.h"	// 【自前改造】自動更新／手動更新
+#include "window/CNoteBar.h"	// 【自前改造】並び順の覚え書きを直す
 #include "env/CWriteManager.h"
 #include "CEditApp.h"
 #include "recent/CMRUFile.h"
@@ -1253,6 +1254,75 @@ void CViewCommander::Command_FILE_RENAME( void )
 	}
 
 	std::wstring strMsg = L"名前を変更しました: ";
+	strMsg += strName;
+	m_pCommanderView->SendStatusMessage( strMsg.c_str() );
+}
+
+/*!	Markdown(.md) とテキスト(.txt) を切り替える
+
+	見出し（# ## ###）に色を付けたいときは .md にする。中身は一切いじらないので、
+	いつでも .txt へ戻せる。名前の変更と同じ道（新しい名前で保存 → 元を消す）を通るので、
+	編集中の内容もそのまま新しい名前に乗る。
+
+	@date 2026/09/01 【自前改造】新規作成
+*/
+void CViewCommander::Command_FILE_TOGGLE_MD( void )
+{
+	CEditDoc* pcDoc = GetDocument();
+	const HWND hwndOwner = m_pCommanderView->GetHwnd();
+
+	if( !pcDoc->m_cDocFile.GetFilePathClass().IsValidPath() ){
+		// まだ名前が無い文書は「何にするか」から決める話なので、名前の変更へ回す
+		Command_FILE_RENAME();
+		return;
+	}
+
+	const std::wstring strOldPath = pcDoc->m_cDocFile.GetFilePath();
+	WCHAR szFolder[_MAX_PATH] = L"";
+	WCHAR szOldName[_MAX_PATH] = L"";
+	SplitPath_FolderAndFile( strOldPath.c_str(), szFolder, szOldName );
+
+	// 拡張子を見て、行き先を決める（.md なら .txt へ、それ以外は .md へ）
+	const WCHAR* pszExt = wcsrchr( szOldName, L'.' );
+	const bool bIsMd = ( nullptr != pszExt ) && ( 0 == _wcsicmp( pszExt, L".md" ) || 0 == _wcsicmp( pszExt, L".markdown" ) );
+	std::wstring strName = ( nullptr != pszExt ) ? std::wstring( szOldName, pszExt - szOldName ) : std::wstring( szOldName );
+	strName += bIsMd ? L".txt" : L".md";
+
+	std::wstring strNewPath = szFolder;
+	if( !strNewPath.empty() && L'\\' != strNewPath.back() ){
+		strNewPath += L'\\';
+	}
+	strNewPath += strName;
+
+	if( 0 == _wcsicmp( strNewPath.c_str(), strOldPath.c_str() ) ){
+		return;		// 変わっていない
+	}
+	if( fexist( strNewPath.c_str() ) ){
+		ErrorMessage( hwndOwner, L"同じ名前のファイルが既にあります。\n%ls", strName.c_str() );
+		return;
+	}
+
+	// 新しい名前で保存する（この時点で文書は新しいファイルを指す）
+	if( !Command_FILESAVEAS( strNewPath.c_str(), EEolType::none ) ){
+		return;		// 保存できなかった。元のファイルはそのまま残す
+	}
+
+	// 元のファイルを片付ける。消せなくても保存自体は成功しているので、知らせるだけにする
+	if( fexist( strOldPath.c_str() ) && !::DeleteFile( strOldPath.c_str() ) ){
+		WarningMessage( hwndOwner,
+			L"新しい拡張子で保存しましたが、元のファイルを消せませんでした。\n"
+			L"手で消してください。\n%ls", strOldPath.c_str() );
+	}
+
+	// 🔥 サイドバーで並べ替えているときは、覚え書きの名前も直す。
+	//    忘れると「知らないメモ」扱いになって、決めた場所から一番上へ飛ぶ。
+	CNoteBar::RenameInOrderFile( strOldPath.c_str(), strNewPath.c_str() );
+	// ⚠ NotifyNoteBarChanged は「自分以外」に配るので、自分の一覧は自分で作り直す。
+	//    忘れると、消したはずの古い名前がサイドバーに残って見える。
+	CEditWnd::getInstance()->RefreshNoteBar();
+	CEditWnd::getInstance()->NotifyNoteBarChanged();
+
+	std::wstring strMsg = bIsMd ? L"テキストに戻しました: " : L"Markdown にしました: ";
 	strMsg += strName;
 	m_pCommanderView->SendStatusMessage( strMsg.c_str() );
 }

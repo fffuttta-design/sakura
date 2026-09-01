@@ -94,6 +94,7 @@ F_QUICK_STASH				= 30123,	//クイック退避（Driveへ名前を聞かず保�
 F_QUICK_STASH_OPEN			= 30124,	//退避を開く							なし
 F_CHECK_UPDATE				= 30125,	//今すぐ最新版を確認					なし
 F_FILE_RENAME				= 30126,	//ファイル名の変更（タブ名のダブルクリック）	なし
+F_FILE_TOGGLE_MD			= 30127,	//Markdown(.md)とテキスト(.txt)を切り替える	なし
 F_PRINT						= 30150,	//印刷								なし
 F_PRINT_PREVIEW				= 30151,	//印刷プレビュー					なし
 F_PRINT_PAGESETUP			= 30152,	//印刷ページ設定					なし

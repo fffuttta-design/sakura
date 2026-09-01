@@ -21,6 +21,8 @@
 class CNoteBar final : public CWnd
 {
 public:
+	//! 覚え書き（並び順）の中の名前だけ差し替える（コマンド側からも呼ぶので公開）
+	static void RenameInOrderFile( LPCWSTR pszOldPath, LPCWSTR pszNewPath );	//!< 覚え書きの中の名前だけ差し替える
 	CNoteBar();
 	~CNoteBar() override;
 
@@ -73,6 +75,10 @@ private:
 	int  HitTestList( POINT ptClient ) const;
 
 	/* 並べ替え（ドラッグ＆ドロップ） */
+	void ChangeNoteExt( int nIndex, bool bToMarkdown );	//!< 拡張子を .md / .txt へ付け替える
+	static std::vector<std::wstring> ReadOrderLines( const std::wstring& strFilePath );
+	static void WriteOrderLines( const std::wstring& strFilePath, const std::vector<std::wstring>& vNames );
+	static std::wstring GetOrderFilePathOf( const std::wstring& strAnyPathInDir );
 	void LoadOrder();									//!< 覚え書き（並び順ファイル）を読む
 	void SaveOrder() const;								//!< 今の並びを覚え書きへ書く
 	void ResetOrder();									//!< 覚え書きを捨てて「新しい順」に戻す

@@ -441,6 +441,7 @@
     <ClInclude Include="..\sakura_core\view\colors\CColor_Quote.h" />
     <ClInclude Include="..\sakura_core\view\colors\CColor_RegexKeyword.h" />
     <ClInclude Include="..\sakura_core\view\colors\CColor_Url.h" />
+    <ClInclude Include="..\sakura_core\view\colors\CColor_MdHeading.h" />
     <ClInclude Include="..\sakura_core\view\colors\EColorIndexType.h" />
     <ClInclude Include="..\sakura_core\view\CRuler.h" />
     <ClInclude Include="..\sakura_core\view\CTextArea.h" />
@@ -849,6 +850,7 @@
     <ClCompile Include="..\sakura_core\view\colors\CColor_Quote.cpp" />
     <ClCompile Include="..\sakura_core\view\colors\CColor_RegexKeyword.cpp" />
     <ClCompile Include="..\sakura_core\view\colors\CColor_Url.cpp" />
+    <ClCompile Include="..\sakura_core\view\colors\CColor_MdHeading.cpp" />
     <ClCompile Include="..\sakura_core\view\CRuler.cpp" />
     <ClCompile Include="..\sakura_core\view\CTextArea.cpp" />
     <ClCompile Include="..\sakura_core\view\CTextDrawer.cpp" />

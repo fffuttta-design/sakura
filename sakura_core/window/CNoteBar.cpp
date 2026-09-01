@@ -57,8 +57,36 @@ enum ENoteMenu {
 	NOTEMENU_DELETE,
 	NOTEMENU_REVEAL,
 	NOTEMENU_FOLDER,
+	NOTEMENU_NEW,
+	NOTEMENU_TOMD,
+	NOTEMENU_TOTXT,
 	NOTEMENU_RESETORDER,
 };
+
+
+//! Markdown のメモか（拡張子で見る）
+bool IsMarkdownNote( const std::wstring& strPath )
+{
+	const size_t nDot = strPath.find_last_of( L'.' );
+	if( std::wstring::npos == nDot ){
+		return false;
+	}
+	const std::wstring strExt = strPath.substr( nDot );
+	return ( 0 == _wcsicmp( strExt.c_str(), L".md" ) )
+	    || ( 0 == _wcsicmp( strExt.c_str(), L".markdown" ) );
+}
+
+//! 拡張子だけ入れ替えたパスを作る（拡張子が無ければ足す）
+std::wstring ReplaceNoteExt( const std::wstring& strPath, const WCHAR* pszNewExt )
+{
+	const size_t nSep = strPath.find_last_of( L"\\/" );
+	const size_t nDot = strPath.find_last_of( L'.' );
+	const bool bHasExt = ( std::wstring::npos != nDot )
+	                  && ( std::wstring::npos == nSep || nDot > nSep );
+	std::wstring strNew = bHasExt ? strPath.substr( 0, nDot ) : strPath;
+	strNew += pszNewExt;
+	return strNew;
+}
 
 } // namespace
 
@@ -372,23 +400,36 @@ std::wstring CNoteBar::GetOrderFilePath()
 	return strPath;
 }
 
-/*! 覚え書き（並び順ファイル）を読む
+/*! そのノートと同じフォルダーにある覚え書きの置き場所
+
+	一覧を出しているかどうかに関係なく使えるように、ノートのフルパスから求める。
+*/
+std::wstring CNoteBar::GetOrderFilePathOf( const std::wstring& strAnyPathInDir )
+{
+	const size_t nPos = strAnyPathInDir.find_last_of( L"\\/" );
+	if( std::wstring::npos == nPos ){
+		return std::wstring();
+	}
+	std::wstring strPath = strAnyPathInDir.substr( 0, nPos + 1 );
+	strPath += NOTEBAR_ORDER_FILE_NAME;
+	return strPath;
+}
+
+/*! 覚え書き（並び順ファイル）を読んで、ファイル名の並びにする
 
 	1行1ファイル名。`#` で始まる行と空行は読み飛ばす。
 	書くときは UTF-16LE だが、手で直されても困らないよう UTF-8 も読める。
 */
-void CNoteBar::LoadOrder()
+std::vector<std::wstring> CNoteBar::ReadOrderLines( const std::wstring& strFilePath )
 {
-	m_vOrder.clear();
-
-	const std::wstring strPath = GetOrderFilePath();
-	if( strPath.empty() ){
-		return;
+	std::vector<std::wstring> vNames;
+	if( strFilePath.empty() ){
+		return vNames;
 	}
-	const HANDLE hFile = ::CreateFile( strPath.c_str(), GENERIC_READ,
+	const HANDLE hFile = ::CreateFile( strFilePath.c_str(), GENERIC_READ,
 		FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
 	if( INVALID_HANDLE_VALUE == hFile ){
-		return;		// まだ並べ替えたことがない＝新しい順のまま
+		return vNames;		// まだ並べ替えたことがない＝新しい順のまま
 	}
 	LARGE_INTEGER liSize;
 	std::vector<BYTE> vRaw;
@@ -403,7 +444,7 @@ void CNoteBar::LoadOrder()
 	}
 	::CloseHandle( hFile );
 	if( vRaw.empty() ){
-		return;
+		return vNames;
 	}
 
 	std::wstring strAll;
@@ -430,12 +471,77 @@ void CNoteBar::LoadOrder()
 			strLine.pop_back();
 		}
 		if( !strLine.empty() && L'#' != strLine[0] ){
-			m_vOrder.push_back( strLine );
+			vNames.push_back( strLine );
 		}
 		if( nEnd >= strAll.size() ){
 			break;
 		}
 	}
+	return vNames;
+}
+
+/*! ファイル名の並びを覚え書きへ書く */
+void CNoteBar::WriteOrderLines( const std::wstring& strFilePath, const std::vector<std::wstring>& vNames )
+{
+	if( strFilePath.empty() ){
+		return;
+	}
+	std::wstring strAll( 1, (WCHAR)0xFEFF );	// UTF-16LE の目印（BOM）。見えない字なので直に書かない
+	strAll += L"# SakuraEditorPlus ノートバーの並び順\r\n";
+	strAll += L"# ドラッグで並べ替えると自動で書き換わります。消すと「新しい順」に戻ります。\r\n";
+	for( const std::wstring& strName : vNames ){
+		strAll += strName;
+		strAll += L"\r\n";
+	}
+
+	// 隠しファイルのままだと開き直せないので、いったん属性を戻してから書く
+	::SetFileAttributes( strFilePath.c_str(), FILE_ATTRIBUTE_NORMAL );
+	const HANDLE hFile = ::CreateFile( strFilePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
+		nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
+	if( INVALID_HANDLE_VALUE == hFile ){
+		return;		// 書けなくても致命傷ではない（次に開いたら新しい順に戻るだけ）
+	}
+	DWORD dwWritten = 0;
+	::WriteFile( hFile, strAll.c_str(), (DWORD)(strAll.size() * sizeof(WCHAR)), &dwWritten, nullptr );
+	::CloseHandle( hFile );
+	// メモではないので一覧に出さない（名前でも弾いているが、念のため隠しにもする）
+	::SetFileAttributes( strFilePath.c_str(), FILE_ATTRIBUTE_HIDDEN );
+}
+
+/*! 覚え書きの中の名前だけ差し替える
+
+	🔥 名前や拡張子を変えたときに必ず呼ぶ。忘れると「知らないメモ」扱いになり、
+	   自分で決めた場所から一番上へ飛んでしまう。
+	   一覧を持っていない場所（コマンド側）からも呼べるように static にしてある。
+*/
+void CNoteBar::RenameInOrderFile( LPCWSTR pszOldPath, LPCWSTR pszNewPath )
+{
+	if( nullptr == pszOldPath || nullptr == pszNewPath ){
+		return;
+	}
+	const std::wstring strFilePath = GetOrderFilePathOf( pszOldPath );
+	std::vector<std::wstring> vNames = ReadOrderLines( strFilePath );
+	if( vNames.empty() ){
+		return;		// まだ並べ替えていない＝覚え書きが無い
+	}
+	const std::wstring strOldName = NoteFileName( pszOldPath );
+	const std::wstring strNewName = NoteFileName( pszNewPath );
+	bool bHit = false;
+	for( std::wstring& strName : vNames ){
+		if( 0 == _wcsicmp( strName.c_str(), strOldName.c_str() ) ){
+			strName = strNewName;
+			bHit = true;
+		}
+	}
+	if( bHit ){
+		WriteOrderLines( strFilePath, vNames );
+	}
+}
+
+/*! 覚え書き（並び順ファイル）を読む */
+void CNoteBar::LoadOrder()
+{
+	m_vOrder = ReadOrderLines( GetOrderFilePath() );
 }
 
 /*! 今の並びを覚え書きへ書く
@@ -445,31 +551,12 @@ void CNoteBar::LoadOrder()
 */
 void CNoteBar::SaveOrder() const
 {
-	const std::wstring strPath = GetOrderFilePath();
-	if( strPath.empty() ){
-		return;
-	}
-
-	std::wstring strAll( 1, (WCHAR)0xFEFF );	// UTF-16LE の目印（BOM）。見えない字なので直に書かない
-	strAll += L"# SakuraEditorPlus ノートバーの並び順\r\n";
-	strAll += L"# ドラッグで並べ替えると自動で書き換わります。消すと「新しい順」に戻ります。\r\n";
+	std::vector<std::wstring> vNames;
+	vNames.reserve( m_vNotes.size() );
 	for( const SNote& note : m_vNotes ){
-		strAll += NoteFileName( note.strPath );
-		strAll += L"\r\n";
+		vNames.push_back( NoteFileName( note.strPath ) );
 	}
-
-	// 隠しファイルのままだと開き直せないので、いったん属性を戻してから書く
-	::SetFileAttributes( strPath.c_str(), FILE_ATTRIBUTE_NORMAL );
-	const HANDLE hFile = ::CreateFile( strPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
-		nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
-	if( INVALID_HANDLE_VALUE == hFile ){
-		return;		// 書けなくても致命傷ではない（次に開いたら新しい順に戻るだけ）
-	}
-	DWORD dwWritten = 0;
-	::WriteFile( hFile, strAll.c_str(), (DWORD)(strAll.size() * sizeof(WCHAR)), &dwWritten, nullptr );
-	::CloseHandle( hFile );
-	// メモではないので一覧に出さない（名前でも弾いているが、念のため隠しにもする）
-	::SetFileAttributes( strPath.c_str(), FILE_ATTRIBUTE_HIDDEN );
+	WriteOrderLines( GetOrderFilePath(), vNames );
 }
 
 /*! 覚え書きを捨てて「新しい順」に戻す */
@@ -1450,14 +1537,21 @@ void CNoteBar::ShowNoteMenu( int nIndex, POINT ptScreen )
 		return;
 	}
 	const bool bHasItem = ( 0 <= nIndex && (size_t)nIndex < m_vNotes.size() );
+	// 何も無い所で押したときは、ここが主役になる
+	::AppendMenu( hMenu, MF_STRING, NOTEMENU_NEW, L"新しいメモ(&N)" );
+	::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
 	if( bHasItem ){
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_OPEN,   L"開く(&O)" );
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_RENAME, L"名前の変更(&M)..." );
+		// 拡張子の付け替え。今が Markdown なら「戻す」だけを出す（取り違えないように）
+		if( IsMarkdownNote( m_vNotes[nIndex].strPath ) ){
+			::AppendMenu( hMenu, MF_STRING, NOTEMENU_TOTXT, L"テキスト（.txt）に戻す(&T)" );
+		}else{
+			::AppendMenu( hMenu, MF_STRING, NOTEMENU_TOMD, L"Markdown（.md）にする(&K)" );
+		}
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_DELETE, L"削除(&D)" );
 		::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_REVEAL, L"エクスプローラーで表示(&E)" );
-	}
-	if( bHasItem ){
 		::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
 	}
 	// 自分で並べ替えたあと、元の「新しい順」へ戻す道を必ず残しておく
@@ -1475,6 +1569,12 @@ void CNoteBar::ShowNoteMenu( int nIndex, POINT ptScreen )
 	case NOTEMENU_RENAME:	RenameNote( nIndex );	break;
 	case NOTEMENU_DELETE:	DeleteNote( nIndex );	break;
 	case NOTEMENU_REVEAL:	RevealNote( nIndex );	break;
+	case NOTEMENU_NEW:
+		// 「＋」ボタンは外したので、ここが唯一の入口。Ctrl+N と同じ道を通す
+		::PostMessageAny( GetParentHwnd(), WM_COMMAND, MAKEWPARAM( F_FILENEW, 0 ), (LPARAM)nullptr );
+		break;
+	case NOTEMENU_TOMD:		ChangeNoteExt( nIndex, true );	break;
+	case NOTEMENU_TOTXT:	ChangeNoteExt( nIndex, false );	break;
 	case NOTEMENU_RESETORDER:
 		if( IDYES == ::MessageBox( GetHwnd(),
 				L"自分で並べ替えた順を捨てて、新しい順に戻します。\nよろしいですか？",
@@ -1570,6 +1670,51 @@ void CNoteBar::RenameNote( int nIndex )
 	}
 	Refresh( true );
 	GetEditWnd().NotifyNoteBarChanged();	// 他の窓の一覧にも新しい名前を届ける
+}
+
+/*! 拡張子を .md（Markdown）と .txt（テキスト）で付け替える
+
+	Markdown にすると、見出し（# ## ###）が色と太字で見分けられるようになる。
+	中身は一切いじらない＝いつでも戻せる。
+
+	🔥 開いたままのメモは、ファイルだけ動かしてはいけない。
+	   タブが古い名前を指したままになり、次に保存した瞬間に元の名前で復活して
+	   「同じメモが2つ」になる。∴ 開いている窓に付け替えを頼む。
+*/
+void CNoteBar::ChangeNoteExt( int nIndex, bool bToMarkdown )
+{
+	if( nIndex < 0 || (size_t)nIndex >= m_vNotes.size() ){
+		return;
+	}
+	const std::wstring strOldPath = m_vNotes[nIndex].strPath;
+	const std::wstring strNewPath = ReplaceNoteExt( strOldPath, bToMarkdown ? L".md" : L".txt" );
+	if( strNewPath.empty() || 0 == _wcsicmp( strNewPath.c_str(), strOldPath.c_str() ) ){
+		return;		// 変わっていない
+	}
+	if( fexist( strNewPath.c_str() ) ){
+		ErrorMessage( GetHwnd(), L"同じ名前のファイルが既にあります。\n%ls",
+			NoteFileName( strNewPath ).c_str() );
+		return;
+	}
+
+	// 開いているなら、その窓に頼む（編集中の内容ごと新しい名前で保存し直してくれる）
+	HWND hwndOpened = nullptr;
+	if( !CShareData::getInstance()->IsPathOpened( strOldPath.c_str(), &hwndOpened ) ){
+		hwndOpened = nullptr;
+	}
+	if( hwndOpened && ::IsWindow( hwndOpened ) ){
+		::PostMessageAny( hwndOpened, WM_COMMAND, MAKEWPARAM( F_FILE_TOGGLE_MD, 0 ), (LPARAM)nullptr );
+		return;		// 一覧の作り直しは、付け替えた窓が全員に知らせる
+	}
+
+	if( !::MoveFile( strOldPath.c_str(), strNewPath.c_str() ) ){
+		ErrorMessage( GetHwnd(), L"拡張子を変えられませんでした。\n%ls", strOldPath.c_str() );
+		return;
+	}
+	// 自分で並べ替えているなら、覚え書きの名前も差し替える（元の場所に居座らせる）
+	RenameInOrderFile( strOldPath.c_str(), strNewPath.c_str() );
+	Refresh( true );
+	GetEditWnd().NotifyNoteBarChanged();
 }
 
 /*! 消す（ごみ箱へ入れるので取り戻せる） */

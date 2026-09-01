@@ -81,6 +81,7 @@ const EFunctionCode pnFuncList_File[] = {	//Oct. 16, 2000 JEPRO 変数名変更(
 	F_QUICK_STASH_OPEN	,	//退避を開く		【自前改造】
 	F_CHECK_UPDATE		,	//今すぐ最新版を確認	【自前改造】
 	F_FILE_RENAME		,	//ファイル名の変更	【自前改造】
+	F_FILE_TOGGLE_MD	,	//Markdown/テキストの切り替え	【自前改造】
 	F_FILECLOSE			,	//閉じて(無題)	//Oct. 17, 2000 jepro 「ファイルを閉じる」というキャプションを変更
 	F_FILECLOSE_OPEN	,	//閉じて開く
 	F_WINCLOSE			,	//ウィンドウを閉じる	//Oct.17,2000 コマンド本家は「ウィンドウ系」	//Feb. 18, 2001	JEPRO 下から移動した

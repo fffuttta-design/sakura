@@ -1537,6 +1537,9 @@
 #define STR_COLOR_BOOKMARK              34724
 #define STR_COLOR_NOTE_LINE             34725
 #define STR_COLOR_PAGEVIEW              34726
+#define STR_COLOR_MDHEAD1               34727
+#define STR_COLOR_MDHEAD2               34728
+#define STR_COLOR_MDHEAD3               34729
 #define STR_ERR_CSPLITTER01             34735
 #define STR_TABWND_LR_INFO              34736
 #define STR_TABWND_CLOSETAB             34737

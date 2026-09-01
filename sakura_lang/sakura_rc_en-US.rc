@@ -4052,6 +4052,9 @@ BEGIN
     STR_COLOR_BOOKMARK      "Bookmark"
     STR_COLOR_NOTE_LINE     "Note Line"
     STR_COLOR_PAGEVIEW      "View Range(Minimap)"
+    STR_COLOR_MDHEAD1       "Markdown Heading 1 (#)"
+    STR_COLOR_MDHEAD2       "Markdown Heading 2 (##)"
+    STR_COLOR_MDHEAD3       "Markdown Heading 3 (###)"
     STR_ERR_CSPLITTER01     "SplitterWnd class registration failed."
 END
 

@@ -3949,6 +3949,9 @@ BEGIN
     STR_COLOR_BOOKMARK      "书签颜色"
     STR_COLOR_NOTE_LINE     "注释行颜色"
     STR_COLOR_PAGEVIEW      "可视范围(缩略图)"
+    STR_COLOR_MDHEAD1       "Markdown Heading 1 (#)"
+    STR_COLOR_MDHEAD2       "Markdown Heading 2 (##)"
+    STR_COLOR_MDHEAD3       "Markdown Heading 3 (###)"
     STR_ERR_CSPLITTER01     "SplitterWnd类注册失败"
 END
 

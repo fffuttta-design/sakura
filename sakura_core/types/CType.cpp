@@ -275,7 +275,10 @@ void _DefaultConfig(STypeConfig* pType)
 	pType->m_nNoteLineOffset = 0;
 
 	//  保存時に改行コードの混在を警告する	2013/4/14 Uchi
-	pType->m_bChkEnterAtEnd = true;
+	//  🔥【自前改造】既定でオフ。ネットから貼った文にはよそのPCの改行が混ざるのが普通で、
+	//     保存のたびに「統一しますか？」と聞かれるのが邪魔なだけだった。
+	//     オフでも混ざったまま保存されるだけで、中身は壊れない（＝「いいえ」を押したのと同じ）。
+	pType->m_bChkEnterAtEnd = false;
 
 	pType->m_bUseTypeFont = false;			//!< タイプ別フォントの使用
 

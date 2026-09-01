@@ -2273,6 +2273,7 @@ BEGIN
     F_QUICK_STASH_OPEN      "退避を開く..."
     F_CHECK_UPDATE          "今すぐ最新版を確認..."
     F_FILE_RENAME           "ファイル名の変更..."
+    F_FILE_TOGGLE_MD        "Markdown(.md)とテキスト(.txt)を切り替え"
 END
 
 STRINGTABLE
@@ -3981,6 +3982,9 @@ BEGIN
     STR_COLOR_BOOKMARK      "ブックマーク"
     STR_COLOR_NOTE_LINE     "ノート線"
     STR_COLOR_PAGEVIEW      "表示範囲(ミニマップ)"
+    STR_COLOR_MDHEAD1       "Markdown 見出し1 (#)"
+    STR_COLOR_MDHEAD2       "Markdown 見出し2 (##)"
+    STR_COLOR_MDHEAD3       "Markdown 見出し3 (###)"
     STR_ERR_CSPLITTER01     "SplitterWndクラスの登録に失敗しました。"
 END
 

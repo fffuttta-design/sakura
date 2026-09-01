@@ -87,6 +87,11 @@ const std::array ColorInfo_DEFAULT = {
 	ColorInfoIni{ STR_COLOR_DIFF_DEL,					{ true,		{ false,	false },	{ RGB( 213, 106,   0 ),	RGB( 255, 233, 172 ) } } },
 	ColorInfoIni{ STR_COLOR_BOOKMARK,					{ true ,	{ false,	false },	{ RGB( 255, 251, 240 ),	RGB(   0, 128, 192 ) } } },
 	ColorInfoIni{ STR_COLOR_PAGEVIEW,					{ true ,	{ false,	false },	{ RGB( 255, 251, 240 ),	RGB( 190, 230, 255 ) } } },
+	// 【自前改造】Markdown の見出し。サクラは全行を同じ高さの升目に描くので、
+	//             文字を大きくはできない。∴ 色と太字で段の違いを見せる。
+	ColorInfoIni{ STR_COLOR_MDHEAD1,					{ true ,	{ true,		false },	{ RGB(   0,  92, 197 ),	RGB( 255, 251, 240 ) } } },
+	ColorInfoIni{ STR_COLOR_MDHEAD2,					{ true ,	{ true,		false },	{ RGB(   0, 137, 123 ),	RGB( 255, 251, 240 ) } } },
+	ColorInfoIni{ STR_COLOR_MDHEAD3,					{ true ,	{ true,		false },	{ RGB( 150,  85,   0 ),	RGB( 255, 251, 240 ) } } },
 };
 
 void GetDefaultColorInfo(ColorInfo* pColorInfo, size_t nIndex) noexcept

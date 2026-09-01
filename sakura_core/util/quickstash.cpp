@@ -13,7 +13,17 @@
 namespace {
 //! 候補1: Google ドライブ（H: = contact@run-strategy.jp を優先。次に G: 個人、I: 家族）
 const WCHAR* const ppszDriveCandidates[] = { L"H:", L"G:", L"I:" };
-const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"SakuraEditorPlus", L"退避" };
+//! ノートの置き場所までの道のり（最後の1段は下の ppszNoteDirNames で決める）
+const WCHAR* const ppszSubDirs[] = { L"マイドライブ", L"ツール開発", L"SakuraEditorPlus" };
+//! いちばん下のフォルダーの名前。先に見つかった方を使う
+/*!
+	🔥 名前を「退避」から「ノート」へ変えたが、**古い名前も必ず残しておく**。
+	   ドライブ越しに2台へ配っているので、片方だけ新しい版になった瞬間に
+	   「メモが1件も無い」ように見えてしまう。両方見れば、どちら側から名前を
+	   変えても、どちらの端末でも同じ中身が出る。
+	   （どちらも無いときだけ、先頭の名前で新しく作る）
+*/
+const WCHAR* const ppszNoteDirNames[] = { L"ノート", L"退避" };
 }	// namespace
 
 /*! Google ドライブがまだ現れていない（接続待ち）か
@@ -63,8 +73,26 @@ std::wstring GetQuickStashDir()
 				break;
 			}
 		}
-		if( bOk ){
-			return strPath;
+		if( !bOk ){
+			continue;
+		}
+		// 最後の1段は、既にある方の名前を使う（新旧どちらの名前でも拾える）
+		for( const WCHAR* pszName : ppszNoteDirNames ){
+			std::wstring strNote = strPath;
+			strNote += L"\\";
+			strNote += pszName;
+			if( IsDirectory( strNote.c_str() ) ){
+				return strNote;
+			}
+		}
+		// どちらも無い＝初めて使う端末。今の名前で作る
+		{
+			std::wstring strNote = strPath;
+			strNote += L"\\";
+			strNote += ppszNoteDirNames[0];
+			if( ::CreateDirectory( strNote.c_str(), nullptr ) ){
+				return strNote;
+			}
 		}
 	}
 

@@ -81,6 +81,9 @@ enum EColorIndexType {
 	COLORIDX_DIFF_DELETE,	//!< DIFF追加  //@@@ 2002.06.01 MIK
 	COLORIDX_MARK,			//!< ブックマーク  // 02/10/16 ai Add
 	COLORIDX_PAGEVIEW,		//!< 表示範囲(ミニマップ)  // 2014.07.14 Add
+	COLORIDX_MDHEAD1,		//!< 【自前改造】Markdown 見出し1（# ）
+	COLORIDX_MDHEAD2,		//!< 【自前改造】Markdown 見出し2（## ）
+	COLORIDX_MDHEAD3,		//!< 【自前改造】Markdown 見出し3（### 以下）
 
 	//カラーの最後
 	COLORIDX_LAST,			//!< カラーの最後
