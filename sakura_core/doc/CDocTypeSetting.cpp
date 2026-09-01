@@ -35,7 +35,9 @@ const std::array ColorInfo_DEFAULT = {
 	ColorInfoIni{ STR_COLOR_CURSOR,						{ true,		{ false,	false },	{ RGB(   0,   0,   0 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_CURSOR_IMEON,				{ true,		{ false,	false },	{ RGB( 255,   0,   0 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_CURSOR_LINE_BG,				{ false,	{ false,	false },	{ RGB(   0,   0,   0 ),	RGB( 255, 255, 128 ) } } },
-	ColorInfoIni{ STR_COLOR_CURSOR_LINE,				{ true,		{ false,	false },	{ RGB(   0,   0, 255 ),	RGB( 255, 251, 240 ) } } },
+	// 【自前改造】カーソル行アンダーライン（青い横線）は既定でオフ。
+	//   行いっぱいに引かれて本文より目立ち、本人から「邪魔」と指摘（2026-09-01）。
+	ColorInfoIni{ STR_COLOR_CURSOR_LINE,				{ false,	{ false,	false },	{ RGB(   0,   0, 255 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_CURSOR_COLUMN,				{ false,	{ false,	false },	{ RGB( 128, 128, 255 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_NOTE_LINE,					{ false,	{ false,	false },	{ RGB( 192, 192, 255 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_LINE_NO,					{ true,		{ false,	false },	{ RGB(   0,   0, 255 ),	RGB( 239, 239, 239 ) } } },

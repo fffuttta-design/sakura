@@ -1411,6 +1411,23 @@ void CShareData_IO::ShareData_IO_Types( CDataProfile& cProfile )
 		}
 	}
 
+	// 🔥【自前改造】カーソル行のアンダーライン（青い横線）を消す。
+	//    タイプ別設定なので、既定を変えただけでは既に書かれている ini に負ける。
+	//    ∴ 一度きりの引っ越しとして全タイプで消す（また出したければ設定画面で戻せる）。
+	if( !cProfile.IsReadingMode() ){
+		int nDoneOut = 1;
+		cProfile.IOProfileData( L"Other", L"nCursorUnderlineOffApplied", nDoneOut );
+	}else{
+		int nDone = 0;
+		cProfile.IOProfileData( L"Other", L"nCursorUnderlineOffApplied", nDone );
+		if( 0 == nDone ){
+			for( i = 0; i < pShare->m_nTypesCount; ++i ){
+				types[i]->m_ColorInfoArr[COLORIDX_UNDERLINE].m_bDisp = false;
+			}
+			pShare->m_TypeBasis.m_ColorInfoArr[COLORIDX_UNDERLINE].m_bDisp = false;
+		}
+	}
+
 	// 🔥【自前改造】保存のたびに出る「改行コードが混在しています」を止める。
 	//    この設定はタイプ別なので、既に書かれている ini を読むと true に戻ってしまう。
 	//    ∴ 一度きりの引っ越しとして、全タイプの警告を切る。
