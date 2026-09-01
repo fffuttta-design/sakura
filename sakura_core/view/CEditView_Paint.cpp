@@ -485,6 +485,12 @@ void CEditView::SetCurrentColor( CGraphics& gr, EColorIndexType eColorIndex,  EC
 			sFont.m_hFont = hHead;
 		}
 	}
+	// 【自前改造】見出しの `#` 記号は背景と同じ色で描く＝見えなくする。
+	//   🔥 設定の色ではなく**そのとき実際に使う背景色**に合わせる。選択中や
+	//      カーソル行の背景でも確実に消えるようにするため。
+	if( COLORIDX_MDMARK == eColorIndex ){
+		gr.SetTextForeColor( bkcolor );
+	}
 	gr.SetMyFont(sFont);
 }
 

@@ -180,6 +180,7 @@ CColorStrategyPool::CColorStrategyPool()
 	m_pcFoundStrategy = new CColor_Found();
 //	m_vStrategies.push_back(new CColor_Found);				// マッチ文字列
 	// 【自前改造】Markdown の見出し。行ぜんぶを持っていくので、他より先に見る
+	m_vStrategies.push_back(new CColor_MdMarker);	// # 記号（見出しより先に見る）
 	m_vStrategies.push_back(new CColor_MdHeading(1, COLORIDX_MDHEAD1));
 	m_vStrategies.push_back(new CColor_MdHeading(2, COLORIDX_MDHEAD2));
 	m_vStrategies.push_back(new CColor_MdHeading(3, COLORIDX_MDHEAD3));
@@ -338,7 +339,7 @@ void CColorStrategyPool::OnChangeSetting(void)
 	if( m_bSkipBeforeLayoutGeneral ){
 		for( const CColorStrategy* pStrategy : m_vStrategiesDisp ){
 			const EColorIndexType eColor = pStrategy->GetStrategyColor();
-			if( COLORIDX_MDHEAD1 <= eColor && eColor <= COLORIDX_MDHEAD3 ){
+			if( COLORIDX_MDHEAD1 <= eColor && eColor <= COLORIDX_MDMARK ){
 				m_bSkipBeforeLayoutGeneral = false;
 				break;
 			}
@@ -444,6 +445,7 @@ const SColorAttributeData g_ColorAttributeArr[] =
 	{L"MH1", 0},	//【自前改造】Markdown 見出し1
 	{L"MH2", 0},	//【自前改造】Markdown 見出し2
 	{L"MH3", 0},	//【自前改造】Markdown 見出し3
+	{L"MHM", 0},	//【自前改造】Markdown 見出しの # 記号
 	{L"LAST", 0}	// Not Used
 };
 

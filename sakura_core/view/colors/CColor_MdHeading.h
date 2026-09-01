@@ -36,4 +36,26 @@ private:
 	bool				m_bMarkdown = false;	//!< 今開いているのが Markdown か
 	int					m_nEnd = 0;				//!< 色を終える位置
 };
+//! 見出しの `#` 記号を「見えなく」する
+/*!
+	背景と同じ色で描くので、記号は消えたように見える（ふたMEMO の見え方に寄せた）。
+	⚠ 升目は消せないので、その分だけ見出しが右へずれる。文字そのものを消すと
+	   クリック位置と文字位置がずれるため、ここは色で消すのが正解。
+*/
+class CColor_MdMarker final : public CColorStrategy{
+public:
+	EColorIndexType GetStrategyColor() const override{ return COLORIDX_MDMARK; }
+	void InitStrategyStatus() override{ m_nEnd = 0; }
+	bool BeginColor(const CStringRef& cStr, int nPos) override;
+	bool EndColor(const CStringRef& cStr, int nPos) override;
+	bool Disp() const override{
+		return m_bMarkdown && m_pTypeData->m_ColorInfoArr[COLORIDX_MDMARK].m_bDisp;
+	}
+	void Update(void) override;
+
+private:
+	bool	m_bMarkdown = false;
+	int		m_nEnd = 0;
+};
+
 #endif /* SAKURA_CCOLOR_MDHEADING_H_ */

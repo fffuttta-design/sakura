@@ -3952,6 +3952,7 @@ BEGIN
     STR_COLOR_MDHEAD1       "Markdown Heading 1 (#)"
     STR_COLOR_MDHEAD2       "Markdown Heading 2 (##)"
     STR_COLOR_MDHEAD3       "Markdown Heading 3 (###)"
+    STR_COLOR_MDMARK        "Markdown Heading Marker (#)"
     STR_ERR_CSPLITTER01     "SplitterWnd类注册失败"
 END
 

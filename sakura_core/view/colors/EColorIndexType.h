@@ -84,6 +84,7 @@ enum EColorIndexType {
 	COLORIDX_MDHEAD1,		//!< 【自前改造】Markdown 見出し1（# ）
 	COLORIDX_MDHEAD2,		//!< 【自前改造】Markdown 見出し2（## ）
 	COLORIDX_MDHEAD3,		//!< 【自前改造】Markdown 見出し3（### 以下）
+	COLORIDX_MDMARK,		//!< 【自前改造】Markdown 見出しの # 記号（背景と同じ色で描いて見えなくする）
 
 	//カラーの最後
 	COLORIDX_LAST,			//!< カラーの最後

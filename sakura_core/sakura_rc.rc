@@ -3985,6 +3985,7 @@ BEGIN
     STR_COLOR_MDHEAD1       "Markdown 見出し1 (#)"
     STR_COLOR_MDHEAD2       "Markdown 見出し2 (##)"
     STR_COLOR_MDHEAD3       "Markdown 見出し3 (###)"
+    STR_COLOR_MDMARK        "Markdown 見出しの # 記号"
     STR_ERR_CSPLITTER01     "SplitterWndクラスの登録に失敗しました。"
 END
 

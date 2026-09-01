@@ -1411,6 +1411,29 @@ void CShareData_IO::ShareData_IO_Types( CDataProfile& cProfile )
 		}
 	}
 
+	// 🔥【自前改造】Markdown の見出しを黒字にする（ふたMEMO の見え方に寄せた）。
+	//    7261〜7267 で青・青緑・茶を ini に書いてしまっているので、一度きりで本文と同じ色に戻す。
+	if( !cProfile.IsReadingMode() ){
+		int nDoneOut = 1;
+		cProfile.IOProfileData( L"Other", L"nMdHeadBlackApplied", nDoneOut );
+	}else{
+		int nDone = 0;
+		cProfile.IOProfileData( L"Other", L"nMdHeadBlackApplied", nDone );
+		if( 0 == nDone ){
+			for( i = 0; i < pShare->m_nTypesCount; ++i ){
+				const COLORREF cText = types[i]->m_ColorInfoArr[COLORIDX_TEXT].m_sColorAttr.m_cTEXT;
+				const COLORREF cBack = types[i]->m_ColorInfoArr[COLORIDX_TEXT].m_sColorAttr.m_cBACK;
+				for( int k = COLORIDX_MDHEAD1; k <= COLORIDX_MDHEAD3; ++k ){
+					types[i]->m_ColorInfoArr[k].m_sColorAttr.m_cTEXT = cText;
+					types[i]->m_ColorInfoArr[k].m_sColorAttr.m_cBACK = cBack;
+				}
+				types[i]->m_ColorInfoArr[COLORIDX_MDMARK].m_bDisp = true;
+				types[i]->m_ColorInfoArr[COLORIDX_MDMARK].m_sColorAttr.m_cTEXT = cBack;
+				types[i]->m_ColorInfoArr[COLORIDX_MDMARK].m_sColorAttr.m_cBACK = cBack;
+			}
+		}
+	}
+
 	// 🔥【自前改造】カーソル行のアンダーライン（青い横線）を消す。
 	//    タイプ別設定なので、既定を変えただけでは既に書かれている ini に負ける。
 	//    ∴ 一度きりの引っ越しとして全タイプで消す（また出したければ設定画面で戻せる）。
