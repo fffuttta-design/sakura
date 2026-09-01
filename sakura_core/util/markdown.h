@@ -75,6 +75,7 @@ constexpr int MD_MARKER_MAX = 16;
 //! 行頭が見出しなら、段（1～3）と本文の始まる位置を返す
 /*!
 	`#` は 1～6 個。そのうしろの空白は本文に含めない（記号ごと飲み込むため）。
+	`#` だけの行（本文がまだ無い・全部消した）も見出しとして扱う。
 	🔥 空白は要求しない。本人は `#見出し` と詰めて書く（2026-09-01）。
 	   行頭でしか見ないので、文中のハッシュタグを拾う心配は無い。
 
@@ -91,7 +92,7 @@ inline bool MdParseHeading( const wchar_t* pLine, int nLen, int* pnLevel, int* p
 	while( nSharp < nLen && L'#' == pLine[nSharp] ){
 		++nSharp;
 	}
-	if( nSharp <= 0 || 6 < nSharp || nSharp >= nLen ){
+	if( nSharp <= 0 || 6 < nSharp ){
 		return false;
 	}
 	int nText = nSharp;
@@ -99,10 +100,10 @@ inline bool MdParseHeading( const wchar_t* pLine, int nLen, int* pnLevel, int* p
 	    && ( L' ' == pLine[nText] || L'\t' == pLine[nText] ) ){
 		++nText;
 	}
-	// 見出しの文字が無い（`#` と空白だけ）なら見出しにしない
-	if( nText >= nLen || L'\r' == pLine[nText] || L'\n' == pLine[nText] ){
-		return false;
-	}
+	// 🔥 **`#` と空白だけの行も見出しとして扱う。**
+	//    ここで「文字が無ければ見出しではない」としていたため、見出しの本文を全部消すと
+	//    隠していた `#` が生きかえって画面に出てきた（2026-09-01 本人から指摘）。
+	//    一度見出しにしたものは、中身が空でも見出しのまま＝記号は出さない。
 	if( pnLevel )     *pnLevel = ( 3 < nSharp ) ? 3 : nSharp;
 	if( pnTextStart ) *pnTextStart = nText;
 	return true;
