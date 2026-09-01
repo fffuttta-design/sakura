@@ -131,6 +131,15 @@ void CLayoutMgr::SetLayoutInfo(
 
 	//タイプ別設定
 	m_pTypeConfig = &refType;
+
+	// 【自前改造】Markdown なら行頭の `#` を幅ゼロにする（見出しの頭を本文とそろえる）
+	//   🔥 ここで決めておくのは、1文字描くたびにファイル名を調べ直さないため。
+	//      レイアウトを作り直すきっかけ（読み込み・タイプ変更・拡張子の変更）は必ずここを通る。
+	{
+		const CEditDoc* pcDocForMd = CEditDoc::GetInstance(0);
+		m_bMdHeadingHide = ( nullptr != pcDocForMd )
+			&& IsMarkdownPath( pcDocForMd->m_cDocFile.GetFilePath() );
+	}
 	m_nMaxLineKetas = nMaxLineKetas;
 	m_nTabSpace = nTabSpace;
 	int nTsvModeOld = m_tsvInfo.m_nTsvMode;

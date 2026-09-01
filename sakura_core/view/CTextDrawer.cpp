@@ -76,11 +76,13 @@ void CTextDrawer::DispText( HDC hdc, DispPos* pDispPos, int marginy, const wchar
 		if ( x < 0 ){
 			const CLayoutMgr& layoutMgr = m_pEditView->m_pcEditDoc->m_cLayoutMgr;
 			const int nLeftLayout = (0 - x) / nDx;
-			CLayoutXInt nCharLayout = layoutMgr.GetLayoutXOfChar(pData, nLength, nBeforeLogic);
+			// ⚠ ここの pData は「色の切れ目で切った途中の文字列」なので、行頭判定に使えない。
+			//    Markdown の見出し記号を幅ゼロにする細工を通さない Raw を使う。
+			CLayoutXInt nCharLayout = layoutMgr.GetLayoutXOfCharRaw(pData, nLength, nBeforeLogic);
 			while ((nBeforeLayout + nCharLayout) <= nLeftLayout) {
 				nBeforeLayout += nCharLayout;
 				nBeforeLogic  += CNativeW::GetSizeOfChar( pData, nLength, nBeforeLogic );
-				nCharLayout = layoutMgr.GetLayoutXOfChar(pData, nLength, nBeforeLogic);
+				nCharLayout = layoutMgr.GetLayoutXOfCharRaw(pData, nLength, nBeforeLogic);
 			}
 		}
 

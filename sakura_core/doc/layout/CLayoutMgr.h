@@ -28,6 +28,7 @@
 #include <vector>
 #include <memory_resource>
 #include <atomic>
+#include "util/markdown.h"	// 【自前改造】Markdown の見出し記号を幅ゼロにする
 #include "doc/CDocListener.h"
 #include "_main/global.h"// 2002/2/10 aroka
 #include "basis/SakuraBasis.h"
@@ -273,7 +274,23 @@ public:
 
 	BOOL CalculateTextWidth( BOOL bCalLineLen = TRUE, CLayoutInt nStart = CLayoutInt(-1), CLayoutInt nEnd = CLayoutInt(-1) );	/* テキスト最大幅を算出する */		// 2009.08.28 nasukoji
 	void ClearLayoutLineWidth( void );				/* 各行のレイアウト行長の記憶をクリアする */		// 2009.08.28 nasukoji
+	//! 1文字ぶんのレイアウト幅（行頭からの通し位置 i を渡すこと）
+	/*!
+		🔥 【自前改造】Markdown の行頭 `#` は幅ゼロにして、見出しの頭を本文とそろえる。
+		   ∴ **pData は必ず「行の先頭」から**渡すこと。行の途中を指すポインタを渡すと
+		   行頭判定を誤る（その用途には GetLayoutXOfCharRaw を使う）。
+		   幅ゼロの文字は異体字セレクタで元からある形なので、変換や折り返しは今までどおり動く。
+	*/
 	CLayoutXInt GetLayoutXOfChar( const wchar_t* pData, int nDataLen, int i ) const {
+		if( m_bMdHeadingHide && i < MD_MARKER_MAX && 0 < nDataLen && L'#' == pData[0] ){
+			if( i < MdHeadingMarkerLen( pData, nDataLen ) ){
+				return CLayoutXInt(0);
+			}
+		}
+		return GetLayoutXOfCharRaw( pData, nDataLen, i );
+	}
+	//! 1文字ぶんのレイアウト幅（Markdown の見出し記号を考えない素の幅）
+	CLayoutXInt GetLayoutXOfCharRaw( const wchar_t* pData, int nDataLen, int i ) const {
 		CLayoutXInt nSpace = CLayoutXInt(0);
 		if( m_nSpacing ){
 			nSpace = CLayoutXInt(CNativeW::GetKetaOfChar(pData, nDataLen, i)) * m_nSpacing;
@@ -281,6 +298,8 @@ public:
 		return CNativeW::GetColmOfChar( pData, nDataLen, i,
 			GetDllShareData().m_Common.m_sEdit.m_bEnableExtEol) + nSpace;
 	}
+	//! 【自前改造】Markdown の見出し記号を幅ゼロにするか
+	void SetMarkdownHeadingHide( bool bHide ){ m_bMdHeadingHide = bHide; }
 	CLayoutXInt GetLayoutXOfChar( const CStringRef& str, int i ) const {
 		return GetLayoutXOfChar(str.GetPtr(), str.GetLength(), i);
 	}
@@ -399,6 +418,7 @@ protected:
 	CKetaXInt				m_nTabSpace;				//!< TABの文字数
 	CLayoutXInt				m_nCharLayoutXPerKeta;		//!< CKetaXInt(1)あたりのCLayoutXInt値(Spacing入り)
 	CPixelXInt				m_nSpacing;					//!< 1文字ずつの間隔(px)
+	bool					m_bMdHeadingHide = false;	//!< 【自前改造】Markdown の行頭 `#` を幅ゼロにする
 	vector_ex<wchar_t>		m_pszKinsokuHead_1;			//!< 行頭禁則文字	//@@@ 2002.04.08 MIK
 	vector_ex<wchar_t>		m_pszKinsokuTail_1;			//!< 行末禁則文字	//@@@ 2002.04.08 MIK
 	vector_ex<wchar_t>		m_pszKinsokuKuto_1;			//!< 句読点ぶらさげ文字	//@@@ 2002.04.17 MIK

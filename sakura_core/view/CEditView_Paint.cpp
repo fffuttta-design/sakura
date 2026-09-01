@@ -15,6 +15,7 @@
 #include "view/CViewFont.h"
 #include "view/CRuler.h"
 #include "view/colors/CColorStrategy.h"
+#include "util/markdown.h"	// 【自前改造】見出し記号を飛ばす
 #include "view/colors/CColor_Found.h"
 #include "view/figures/CFigureManager.h"
 #include "types/CTypeSupport.h"
@@ -1088,7 +1089,19 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 		int nPosTo = pcLayout->GetLogicOffset() + pcLayout->GetLengthWithEOL();
 		CFigureManager* pcFigureManager = CFigureManager::getInstance();
 		FigureRenderType prevRenderType = CFigure_Text::RenderType_None;
+		// 【自前改造】Markdown の見出し記号 `#` は「描かない・幅も取らない」
+		//   🔥 レイアウト側（CLayoutMgr::GetLayoutXOfChar）でも幅ゼロにしてある。
+		//      ここで送り位置を進めてしまうと、文字とカーソル・選択範囲がずれる。
+		const int nMdMarkerEnd = ( 0 == pcLayout->GetLogicOffset() && IsMarkdownDocument() )
+			? MdHeadingMarkerLen( cLineStr.GetPtr(), cLineStr.GetLength() ) : 0;
 		while(pInfo->m_nPosInLogic < nPosTo){
+			if( pInfo->m_nPosInLogic < nMdMarkerEnd ){
+				pInfo->m_nPosInLogic = nMdMarkerEnd;	// 記号ぶんを丸ごと飛ばす
+				nPosBgn = nMdMarkerEnd;
+				nPosLength = 0;
+				prevRenderType = CFigure_Text::RenderType_None;
+				continue;
+			}
 			int nPosInLogic = pInfo->GetPosInLogic(); // FowardChars/DrawImpで更新される
 			nPosLength = nPosInLogic - nPosBgn;
 			//1文字情報取得

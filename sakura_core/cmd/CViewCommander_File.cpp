@@ -36,6 +36,8 @@
 #include "util/updater.h"	// 【自前改造】自動更新／手動更新
 #include "window/CNoteBar.h"	// 【自前改造】並び順の覚え書きを直す
 #include "util/notehistory.h"	// 【自前改造】メモの変更履歴
+#include "view/colors/CColorStrategy.h"	// 【自前改造】拡張子を変えたら色分けを作り直す
+#include "view/figures/CFigureManager.h"
 #include "env/CWriteManager.h"
 #include "CEditApp.h"
 #include "recent/CMRUFile.h"
@@ -1323,6 +1325,14 @@ void CViewCommander::Command_FILE_TOGGLE_MD( void )
 	//    忘れると、消したはずの古い名前がサイドバーに残って見える。
 	CEditWnd::getInstance()->RefreshNoteBar();
 	CEditWnd::getInstance()->NotifyNoteBarChanged();
+
+	// 🔥 拡張子が変わると「Markdown かどうか」が変わる。
+	//    見出しの色分け・見出しの大きさ・行頭 `#` を幅ゼロにする細工は、
+	//    どれも「タイプ別設定を読み直してレイアウトを作り直す」ところで決まる。
+	//    ここを呼ばないと、開き直すまで見た目が変わらない。
+	CColorStrategyPool::getInstance()->OnChangeSetting();
+	CFigureManager::getInstance()->OnChangeSetting();
+	pcDoc->OnChangeSetting();
 
 	std::wstring strMsg = bIsMd ? L"テキストに戻しました: " : L"Markdown にしました: ";
 	strMsg += strName;

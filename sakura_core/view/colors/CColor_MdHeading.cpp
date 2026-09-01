@@ -34,37 +34,18 @@ void CColor_MdHeading::Update(void)
 
 namespace {
 
-//! 行頭が見出しなら、段（1〜3）と本文の始まる位置を返す
+//! 行頭が見出しなら、段と本文の始まる位置を返す
 /*!
-	`#` は1〜6個。そのうしろの空白は本文に含めない（記号ごと飲み込むため）。
-	🔥 空白は要求しない。本人は `#見出し` と詰めて書く（2026-09-01）。
-	   行頭でしか見ないので、文中のハッシュタグを拾う心配は無い。
+	🔥 判定の中身は util/markdown.h に1本化してある。
+	   描画（記号を飛ばす）とレイアウト（幅ゼロ）も同じ関数を見ているので、
+	   ここだけ条件を変えると文字とカーソルがずれる。
 */
 bool ParseHeading( const CStringRef& cStr, int* pnLevel, int* pnTextStart )
 {
 	if( !cStr.IsValid() ){
 		return false;
 	}
-	const int nLen = cStr.GetLength();
-	const WCHAR* pLine = cStr.GetPtr();
-	int nSharp = 0;
-	while( nSharp < nLen && L'#' == pLine[nSharp] ){
-		++nSharp;
-	}
-	if( nSharp <= 0 || 6 < nSharp || nSharp >= nLen ){
-		return false;
-	}
-	int nText = nSharp;
-	while( nText < nLen && ( L' ' == pLine[nText] || L'\t' == pLine[nText] ) ){
-		++nText;
-	}
-	// 見出しの文字が無い（`#` と空白だけ）なら見出しにしない
-	if( nText >= nLen || L'\r' == pLine[nText] || L'\n' == pLine[nText] ){
-		return false;
-	}
-	if( pnLevel )     *pnLevel = ( 3 < nSharp ) ? 3 : nSharp;
-	if( pnTextStart ) *pnTextStart = nText;
-	return true;
+	return MdParseHeading( cStr.GetPtr(), cStr.GetLength(), pnLevel, pnTextStart );
 }
 
 //! 改行記号の手前まで

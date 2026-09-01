@@ -46,4 +46,54 @@ inline bool IsMarkdownPath( const WCHAR* pszPath )
 	    || ( 0 == ::_wcsicmp( pszExt, L".markdown" ) );
 }
 
+//! 行頭の `#` を隠すときに飲み込む最大の長さ（`#`×6 ＋ うしろの空白）
+/*!
+	空白を無制限に数えると、空白だらけの長い行で 1 文字ごとに行頭から数え直すことになり、
+	描画が重くなる。実用上ここで足りるので上限を切ってある。
+*/
+constexpr int MD_MARKER_MAX = 16;
+
+//! 行頭が見出しなら、段（1～3）と本文の始まる位置を返す
+/*!
+	`#` は 1～6 個。そのうしろの空白は本文に含めない（記号ごと飲み込むため）。
+	🔥 空白は要求しない。本人は `#見出し` と詰めて書く（2026-09-01）。
+	   行頭でしか見ないので、文中のハッシュタグを拾う心配は無い。
+
+	🔥 **判定は必ずこの関数だけを使う。**
+	   色分け・描画・レイアウト（幅ゼロ）の3か所で同じ範囲を指さないと、
+	   文字とカーソルがずれる。
+*/
+inline bool MdParseHeading( const wchar_t* pLine, int nLen, int* pnLevel, int* pnTextStart )
+{
+	if( nullptr == pLine || nLen <= 0 || L'#' != pLine[0] ){
+		return false;
+	}
+	int nSharp = 0;
+	while( nSharp < nLen && L'#' == pLine[nSharp] ){
+		++nSharp;
+	}
+	if( nSharp <= 0 || 6 < nSharp || nSharp >= nLen ){
+		return false;
+	}
+	int nText = nSharp;
+	while( nText < nLen && nText < MD_MARKER_MAX
+	    && ( L' ' == pLine[nText] || L'\t' == pLine[nText] ) ){
+		++nText;
+	}
+	// 見出しの文字が無い（`#` と空白だけ）なら見出しにしない
+	if( nText >= nLen || L'\r' == pLine[nText] || L'\n' == pLine[nText] ){
+		return false;
+	}
+	if( pnLevel )     *pnLevel = ( 3 < nSharp ) ? 3 : nSharp;
+	if( pnTextStart ) *pnTextStart = nText;
+	return true;
+}
+
+//! 行頭の見出し記号（`#` ＋ うしろの空白）の長さ。見出しでなければ 0
+inline int MdHeadingMarkerLen( const wchar_t* pLine, int nLen )
+{
+	int nTextStart = 0;
+	return MdParseHeading( pLine, nLen, nullptr, &nTextStart ) ? nTextStart : 0;
+}
+
 #endif /* SAKURA_MARKDOWN_H_ */
