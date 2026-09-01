@@ -76,6 +76,8 @@ private:
 
 	/* 並べ替え（ドラッグ＆ドロップ） */
 	void ChangeNoteExt( int nIndex, bool bToMarkdown );	//!< 拡張子を .md / .txt へ付け替える
+	void ShowNoteHistory( int nIndex, POINT ptScreen );	//!< 変更履歴の一覧を出す
+	void RestoreNoteHistory( int nIndex, const std::wstring& strHistPath );	//!< 履歴の版に戻す
 	static std::vector<std::wstring> ReadOrderLines( const std::wstring& strFilePath );
 	static void WriteOrderLines( const std::wstring& strFilePath, const std::vector<std::wstring>& vNames );
 	static std::wstring GetOrderFilePathOf( const std::wstring& strAnyPathInDir );

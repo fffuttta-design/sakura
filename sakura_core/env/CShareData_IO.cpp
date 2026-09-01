@@ -20,6 +20,7 @@
 #include "_main/CCommandLine.h"
 #include "_main/CControlProcess.h"
 #include "config/app_constants.h"
+#include "types/CType.h"	// 【自前改造】インポートされた Markdown タイプを戻すため
 
 void ShareData_IO_Sub_LogFont( CDataProfile& cProfile, const WCHAR* pszSecName,
 	const WCHAR* pszKeyLf, const WCHAR* pszKeyPointSize, const WCHAR* pszKeyFaceName, LOGFONT& lf, INT& nPointSize );
@@ -1380,6 +1381,36 @@ void CShareData_IO::ShareData_IO_Types( CDataProfile& cProfile )
 			pShare->m_TypeMini[i].m_encoding = type.m_encoding;
 		}
 	}
+	// 🔥【自前改造】どこかでインポートされた「Markdown」タイプを外す。
+	//    本来「テキスト」であるはずの枠が丸ごと差し替えられていて、
+	//    ・見出しが黄色い帯になる（暗いテーマの正規表現キーワードが大量に入っている）
+	//    ・`txt` がどのタイプにも属さなくなる（折り返し桁数などが基本タイプの物になる）
+	//    という状態だった（2026-09-01 本人から指摘）。見出しの色分けはアプリ側で持っているので、
+	//    このタイプは要らない。**一度きり**戻す（本人が後から自分で作り直したら、それは残す）。
+	if( !cProfile.IsReadingMode() ){
+		int nDoneOut = 1;
+		cProfile.IOProfileData( L"Other", L"nImportedMdTypeReset", nDoneOut );
+	}else{
+		int nDone = 0;
+		cProfile.IOProfileData( L"Other", L"nImportedMdTypeReset", nDone );
+		if( 0 == nDone ){
+			for( i = 0; i < pShare->m_nTypesCount; ++i ){
+				if( 0 == wcscmp( types[i]->m_szTypeName, L"Markdown" ) ){
+					const int nIdx = types[i]->m_nIdx;
+					const int nId  = types[i]->m_id;
+					CType_Text().InitTypeConfig( i, *types[i] );
+					types[i]->m_nIdx = nIdx;
+					types[i]->m_id   = nId;
+					wcscpy( pShare->m_TypeMini[i].m_szTypeExts, types[i]->m_szTypeExts );
+					wcscpy( pShare->m_TypeMini[i].m_szTypeName, types[i]->m_szTypeName );
+					if( 0 == i ){
+						pShare->m_TypeBasis = *types[i];
+					}
+				}
+			}
+		}
+	}
+
 	// 🔥【自前改造】保存のたびに出る「改行コードが混在しています」を止める。
 	//    この設定はタイプ別なので、既に書かれている ini を読むと true に戻ってしまう。
 	//    ∴ 一度きりの引っ越しとして、全タイプの警告を切る。

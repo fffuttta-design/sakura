@@ -35,6 +35,7 @@
 #include "layout/CLayoutMgr.h"
 #include "logic/CDocLineMgr.h"
 #include "agent/CBackupAgent.h"
+#include "agent/CNoteHistoryAgent.h"	// 【自前改造】メモの変更履歴
 #include "agent/CAutoSaveAgent.h"
 #include "agent/CAutoReloadAgent.h"
 #include "func/CFuncLookup.h"
@@ -120,6 +121,7 @@ public:
 
 	//ヘルパ
 	CBackupAgent		m_cBackupAgent;
+	CNoteHistoryAgent	m_cNoteHistoryAgent;	//!< 【自前改造】メモの変更履歴
 	CAutoSaveAgent		m_cAutoSaveAgent;		//!< 自動保存管理
 	CAutoReloadAgent	m_cAutoReloadAgent;
 	CDocOutline			m_cDocOutline;

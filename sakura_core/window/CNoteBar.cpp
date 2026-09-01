@@ -14,6 +14,7 @@
 #include "env/CAppNodeManager.h"
 #include "util/file.h"
 #include "util/quickstash.h"
+#include "util/notehistory.h"
 #include "util/window.h"
 #include "util/MessageBoxF.h"
 #include "uiparts/CGraphics.h"
@@ -60,6 +61,7 @@ enum ENoteMenu {
 	NOTEMENU_NEW,
 	NOTEMENU_TOMD,
 	NOTEMENU_TOTXT,
+	NOTEMENU_HISTORY,
 	NOTEMENU_RESETORDER,
 };
 
@@ -1549,6 +1551,7 @@ void CNoteBar::ShowNoteMenu( int nIndex, POINT ptScreen )
 		}else{
 			::AppendMenu( hMenu, MF_STRING, NOTEMENU_TOMD, L"Markdown（.md）にする(&K)" );
 		}
+		::AppendMenu( hMenu, MF_STRING, NOTEMENU_HISTORY, L"変更履歴(&H)..." );
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_DELETE, L"削除(&D)" );
 		::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
 		::AppendMenu( hMenu, MF_STRING, NOTEMENU_REVEAL, L"エクスプローラーで表示(&E)" );
@@ -1575,6 +1578,7 @@ void CNoteBar::ShowNoteMenu( int nIndex, POINT ptScreen )
 		break;
 	case NOTEMENU_TOMD:		ChangeNoteExt( nIndex, true );	break;
 	case NOTEMENU_TOTXT:	ChangeNoteExt( nIndex, false );	break;
+	case NOTEMENU_HISTORY:	ShowNoteHistory( nIndex, ptScreen );	break;
 	case NOTEMENU_RESETORDER:
 		if( IDYES == ::MessageBox( GetHwnd(),
 				L"自分で並べ替えた順を捨てて、新しい順に戻します。\nよろしいですか？",
@@ -1668,8 +1672,130 @@ void CNoteBar::RenameNote( int nIndex )
 		m_vNotes[nIndex].strPath = strNewPath;
 		SaveOrder();
 	}
+	RenameNoteHistory( strOldPath, strNewPath );	// 変更履歴も一緒に連れて行く
 	Refresh( true );
 	GetEditWnd().NotifyNoteBarChanged();	// 他の窓の一覧にも新しい名前を届ける
+}
+
+
+/*! 変更履歴の一覧を出す
+
+	上書きするたびに「上書きされる前の中身」が残っている。ここから中身を見たり、
+	その版に戻したりできる。実体は `.履歴\<メモ名>\日時.txt`（util/notehistory.h）。
+*/
+void CNoteBar::ShowNoteHistory( int nIndex, POINT ptScreen )
+{
+	if( nIndex < 0 || (size_t)nIndex >= m_vNotes.size() ){
+		return;
+	}
+	const std::wstring strPath = m_vNotes[nIndex].strPath;
+	const std::vector<std::wstring> vHist = ListNoteHistory( strPath );
+	if( vHist.empty() ){
+		::MessageBox( GetHwnd(),
+			L"このメモにはまだ変更履歴がありません。\n\n"
+			L"上書き保存するたびに、その直前の中身が自動で残ります。",
+			L"変更履歴", MB_OK | MB_ICONINFORMATION );
+		return;
+	}
+
+	const HMENU hMenu = ::CreatePopupMenu();
+	if( !hMenu ){
+		return;
+	}
+	const int nShow = (int)std::min<size_t>( vHist.size(), 40 );
+	for( int i = 0; i < nShow; ++i ){
+		// 名前は「YYYY-MM-DD_HHMMSS.txt」。読みやすい形に直して出す
+		const std::wstring strName = NoteFileName( vHist[i] );
+		std::wstring strLabel = strName;
+		if( 17 <= strName.length() ){
+			strLabel  = strName.substr( 0, 10 );	// YYYY-MM-DD
+			strLabel += L" ";
+			strLabel += strName.substr( 11, 2 );
+			strLabel += L":";
+			strLabel += strName.substr( 13, 2 );
+		}
+		// 大きさも出す（どれが「中身のある版」か一目で分かる＝今回の事故で効く）
+		WIN32_FILE_ATTRIBUTE_DATA fad;
+		if( ::GetFileAttributesEx( vHist[i].c_str(), GetFileExInfoStandard, &fad ) ){
+			WCHAR szBuf[32];
+			::wsprintf( szBuf, L"   %d バイト", (int)fad.nFileSizeLow );
+			strLabel += szBuf;
+		}
+		::AppendMenu( hMenu, MF_STRING, (UINT_PTR)(1000 + i), strLabel.c_str() );
+	}
+	::AppendMenu( hMenu, MF_SEPARATOR, 0, nullptr );
+	::AppendMenu( hMenu, MF_STRING, 1, L"履歴のフォルダーを開く(&F)" );
+
+	const int nCmd = ::TrackPopupMenu( hMenu,
+		TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_RIGHTBUTTON,
+		ptScreen.x, ptScreen.y, 0, GetHwnd(), nullptr );
+	::DestroyMenu( hMenu );
+
+	if( 1 == nCmd ){
+		std::wstring strDir = GetNoteHistoryDir( strPath );
+		if( !strDir.empty() ){
+			::ShellExecute( GetHwnd(), L"open", strDir.c_str(), nullptr, nullptr, SW_SHOWNORMAL );
+		}
+		return;
+	}
+	if( 1000 <= nCmd && nCmd < 1000 + nShow ){
+		RestoreNoteHistory( nIndex, vHist[nCmd - 1000] );
+	}
+}
+
+/*! 履歴の版に戻す（戻す前に、今の中身も履歴へ残す）
+
+	🔥 戻したあとに「やっぱり前の方が良かった」となっても取り返せるように、
+	   **戻す直前の中身を必ず履歴に足してから**上書きする。
+*/
+void CNoteBar::RestoreNoteHistory( int nIndex, const std::wstring& strHistPath )
+{
+	if( nIndex < 0 || (size_t)nIndex >= m_vNotes.size() ){
+		return;
+	}
+	const std::wstring strPath = m_vNotes[nIndex].strPath;
+
+	std::wstring strMsg = L"「";
+	strMsg += m_vNotes[nIndex].strTitle;
+	strMsg += L"」を、この版の内容に戻します。\n\n";
+	strMsg += NoteFileName( strHistPath );
+	strMsg += L"\n\n［はい］＝戻す（今の内容も履歴に残します）\n";
+	strMsg += L"［いいえ］＝戻さずに、その版を別のタブで開いて見るだけ";
+	const int nRet = ::MessageBox( GetHwnd(), strMsg.c_str(), L"変更履歴",
+		MB_YESNOCANCEL | MB_ICONQUESTION );
+	if( IDCANCEL == nRet ){
+		return;
+	}
+	if( IDNO == nRet ){
+		// 見るだけ。履歴のファイルをそのまま開く
+		SLoadInfo sLoadInfo( strHistPath.c_str(), CODE_AUTODETECT, false );
+		CControlTray::OpenNewEditor( G_AppInstance(), GetHwnd(), sLoadInfo, nullptr, true );
+		return;
+	}
+
+	// 開いたままだと、あとでタブ側の古い内容で上書きされてしまう
+	HWND hwndOpened = nullptr;
+	if( !CShareData::getInstance()->IsPathOpened( strPath.c_str(), &hwndOpened ) ){
+		hwndOpened = nullptr;
+	}
+	if( hwndOpened && ::IsWindow( hwndOpened ) ){
+		::MessageBox( GetHwnd(),
+			L"このメモは開いたままです。\n"
+			L"先にそのタブを閉じてから、もう一度お試しください。\n\n"
+			L"（開いたまま戻すと、あとでタブ側の内容で上書きされてしまいます）",
+			L"変更履歴", MB_OK | MB_ICONEXCLAMATION );
+		return;
+	}
+
+	// 戻す前の中身も履歴に残す（戻す操作自体をやり直せるように）
+	SaveNoteHistory( strPath );
+	if( !::CopyFile( strHistPath.c_str(), strPath.c_str(), FALSE ) ){
+		ErrorMessage( GetHwnd(), L"戻せませんでした。\n%ls", strPath.c_str() );
+		return;
+	}
+	Refresh( true );
+	GetEditWnd().NotifyNoteBarChanged();
+	::MessageBox( GetHwnd(), L"戻しました。", L"変更履歴", MB_OK | MB_ICONINFORMATION );
 }
 
 /*! 拡張子を .md（Markdown）と .txt（テキスト）で付け替える
@@ -1713,6 +1839,7 @@ void CNoteBar::ChangeNoteExt( int nIndex, bool bToMarkdown )
 	}
 	// 自分で並べ替えているなら、覚え書きの名前も差し替える（元の場所に居座らせる）
 	RenameInOrderFile( strOldPath.c_str(), strNewPath.c_str() );
+	RenameNoteHistory( strOldPath, strNewPath );	// 変更履歴も一緒に連れて行く
 	Refresh( true );
 	GetEditWnd().NotifyNoteBarChanged();
 }

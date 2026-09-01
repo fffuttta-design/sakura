@@ -35,6 +35,7 @@
 #include "util/quickstash.h"	// 【自前改造】退避フォルダーの決定（メニュー側と共用）
 #include "util/updater.h"	// 【自前改造】自動更新／手動更新
 #include "window/CNoteBar.h"	// 【自前改造】並び順の覚え書きを直す
+#include "util/notehistory.h"	// 【自前改造】メモの変更履歴
 #include "env/CWriteManager.h"
 #include "CEditApp.h"
 #include "recent/CMRUFile.h"
@@ -1317,6 +1318,7 @@ void CViewCommander::Command_FILE_TOGGLE_MD( void )
 	// 🔥 サイドバーで並べ替えているときは、覚え書きの名前も直す。
 	//    忘れると「知らないメモ」扱いになって、決めた場所から一番上へ飛ぶ。
 	CNoteBar::RenameInOrderFile( strOldPath.c_str(), strNewPath.c_str() );
+	RenameNoteHistory( strOldPath, strNewPath );	// 変更履歴も一緒に連れて行く
 	// ⚠ NotifyNoteBarChanged は「自分以外」に配るので、自分の一覧は自分で作り直す。
 	//    忘れると、消したはずの古い名前がサイドバーに残って見える。
 	CEditWnd::getInstance()->RefreshNoteBar();

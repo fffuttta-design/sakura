@@ -166,6 +166,8 @@
     <ClInclude Include="..\sakura_core\agent\CAutoReloadAgent.h" />
     <ClInclude Include="..\sakura_core\agent\CAutoSaveAgent.h" />
     <ClInclude Include="..\sakura_core\agent\CBackupAgent.h" />
+    <ClInclude Include="..\sakura_core\agent\CNoteHistoryAgent.h" />
+    <ClInclude Include="..\sakura_core\util\notehistory.h" />
     <ClInclude Include="..\sakura_core\env\CCodeChecker.h" />
     <ClInclude Include="..\sakura_core\env\CDataProfile.h" />
     <ClInclude Include="..\sakura_core\env\CDicMgr.h" />
@@ -525,6 +527,7 @@
     <ClCompile Include="..\sakura_core\agent\CAutoReloadAgent.cpp" />
     <ClCompile Include="..\sakura_core\agent\CAutoSaveAgent.cpp" />
     <ClCompile Include="..\sakura_core\agent\CBackupAgent.cpp" />
+    <ClCompile Include="..\sakura_core\agent\CNoteHistoryAgent.cpp" />
     <ClCompile Include="..\sakura_core\env\CCodeChecker.cpp" />
     <ClCompile Include="..\sakura_core\env\CDataProfile.cpp" />
     <ClCompile Include="..\sakura_core\env\CDicMgr.cpp" />
@@ -810,6 +813,7 @@
     <ClCompile Include="..\sakura_core\uiparts\CWaitCursor.cpp" />
     <ClCompile Include="..\sakura_core\util\file.cpp" />
     <ClCompile Include="..\sakura_core\util\quickstash.cpp" />
+    <ClCompile Include="..\sakura_core\util\notehistory.cpp" />
     <ClCompile Include="..\sakura_core\util\updater.cpp" />
     <ClCompile Include="..\sakura_core\util\format.cpp" />
     <ClCompile Include="..\sakura_core\util\input.cpp" />
