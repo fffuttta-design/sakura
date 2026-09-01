@@ -1115,7 +1115,15 @@ void CEditView::UpdateHeadingFonts()
 		//    固定すると少し縦長になるが、1.25倍なら歪みは14%程度で気にならない
 		//    （1.5倍だと33%歪んで「キモい」見た目になった。2026-09-01 実測）。
 		lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth();
-		lfHead.lfWeight = FW_BOLD;
+		// 🔥 輪郭から描かせる。ＭＳ ゴシックのような字は小さい大きさ用の
+		//    「絵（ビットマップ）」を持っていて、既定の品質だとそれを引き伸ばす。
+		//    引き伸ばした絵は線の太さがバラついて**インクが滲んだように見える**
+		//    （2026-09-01 本人から指摘）。ここを指定すると輪郭から描き直してくれる。
+		lfHead.lfQuality = CLEARTYPE_QUALITY;
+		// 🔥 太字にしない。画数の多い漢字（戦・略・業…）は、この大きさで太らせると
+		//    線どうしがくっついて**インクが滲んだように見える**（2026-09-01 本人から指摘）。
+		//    大きさだけで見出しだと分かるので、太らせる必要が無い。
+		lfHead.lfWeight = FW_NORMAL;
 		m_hFontHeading[i] = ::CreateFontIndirect( &lfHead );
 	}
 }
