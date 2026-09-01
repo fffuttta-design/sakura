@@ -1095,21 +1095,26 @@ void CEditView::UpdateHeadingFonts()
 		return;		// ミニマップと Markdown 以外は素のまま
 	}
 	const int nCharH  = GetTextMetrics().GetHankakuHeight();
-	const int nCharW  = GetTextMetrics().GetHankakuWidth();
 	const int nLineH  = GetTextMetrics().GetHankakuDy();
-	const int nRoom   = nLineH - nCharH;		// 行間として空いているぶん
-	if( nRoom <= 0 || nCharH <= 0 ){
+	if( nCharH <= 0 ){
 		return;
 	}
-	LOGFONT lf = GetFontset().GetLogfont();
+	const LOGFONT lf = GetFontset().GetLogfont();
 	for( int i = 0; i < 3; ++i ){
-		const int nAdd = (int)( nRoom * MD_HEADING_RATIO[i] );
-		if( nAdd <= 0 ){
-			continue;
+		int nHeight = (int)( nCharH * MD_HEADING_SCALE[i] );
+		if( nLineH < nHeight ){
+			nHeight = nLineH;		// 行からはみ出して上下が欠けないようにする
+		}
+		if( nHeight <= nCharH ){
+			continue;				// 大きくならないなら素のままでよい
 		}
 		LOGFONT lfHead = lf;
-		lfHead.lfHeight = -( nCharH + nAdd );	// 負＝文字の高さそのもの
-		lfHead.lfWidth  = nCharW;				// 升目からはみ出させない
+		lfHead.lfHeight = -nHeight;	// 負＝文字そのものの高さ
+		// 🔥 lfWidth は升目の半角幅で固定する（横にはみ出させない）。
+		//    0（おまかせ）にすると背が高いぶん横にも太り、**漢字が隣と重なって読めない**。
+		//    固定すると少し縦長になるが、1.25倍なら歪みは14%程度で気にならない
+		//    （1.5倍だと33%歪んで「キモい」見た目になった。2026-09-01 実測）。
+		lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth();
 		lfHead.lfWeight = FW_BOLD;
 		m_hFontHeading[i] = ::CreateFontIndirect( &lfHead );
 	}
@@ -1141,7 +1146,14 @@ void CEditView::SetFont()
 		//    （全行そろって広がるので、レイアウトの計算は今までどおり。ここが「こじ開け」の要）
 		int nLineSpace = m_pTypeData->m_nLineSpace;
 		if( IsMarkdownDocument() ){
-			nLineSpace += MD_EXTRA_LINE_SPACE;
+			// いちばん大きい見出しが収まるだけの高さを作る（本文の文字の高さから逆算）
+			const int nCharH = GetTextMetrics().GetHankakuHeight();
+			if( 0 < nCharH ){
+				const int nNeed = (int)( nCharH * MD_LINE_HEIGHT_SCALE ) - nCharH;
+				if( nLineSpace < nNeed ){
+					nLineSpace = nNeed;
+				}
+			}
 		}
 		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), DpiScaleY(nLineSpace), DpiScaleX(m_pTypeData->m_nColumnSpace));
 	}
