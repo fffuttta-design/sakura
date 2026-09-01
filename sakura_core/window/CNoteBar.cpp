@@ -364,8 +364,12 @@ void CNoteBar::SplitNoteName( LPCWSTR pszPath, std::wstring* pStrTitle, std::wst
 	if( strName.empty() ){
 		strName = szName;	// 日時だけの名前だったとき
 	}
-	// txt 以外は拡張子も見せる（何のファイルか分かるように）
-	if( 0 != _wcsicmp( szExt, L".txt" ) ){
+	// メモとして扱う拡張子（.txt / .md）は見せない。それ以外だけ「何のファイルか」を出す
+	//   🔥 `.md` も隠す（2026-09-01 本人指示）。Markdown かどうかは中身を開けば分かるので、
+	//      一覧では名前だけを並べたほうが読みやすい。
+	if( 0 != _wcsicmp( szExt, L".txt" )
+	 && 0 != _wcsicmp( szExt, L".md" )
+	 && 0 != _wcsicmp( szExt, L".markdown" ) ){
 		strName += szExt;
 	}
 
