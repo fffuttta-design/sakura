@@ -1082,9 +1082,38 @@ bool CEditView::IsMarkdownDocument() const
 	return ( nullptr != pcDoc ) && IsMarkdownPath( pcDoc->m_cDocFile.GetFilePath() );
 }
 
+namespace {
+
+//! その書体が入っているか（EnumFontFamiliesEx の受け皿）
+int CALLBACK MdFontExistProc( const LOGFONTW*, const TEXTMETRICW*, DWORD, LPARAM lParam )
+{
+	*reinterpret_cast<bool*>( lParam ) = true;
+	return 0;	// 1件見つかれば十分
+}
+
+//! 見出しの書体が使えるか
+/*!
+	🔥 CreateFont は**入っていない書体でも失敗しない**（勝手に別の字に差し替える）。
+	   ∴ 作る前にここで確かめる。確かめずに使うと、無い環境で
+	   「なぜか見出しだけ違う字」になって原因が分からなくなる。
+*/
+bool MdIsFontInstalled( const WCHAR* pszFace )
+{
+	LOGFONTW lf = {};
+	lf.lfCharSet = DEFAULT_CHARSET;
+	::wcscpy_s( lf.lfFaceName, pszFace );
+	bool bFound = false;
+	HDC hdc = ::GetDC( nullptr );
+	::EnumFontFamiliesExW( hdc, &lf, MdFontExistProc, reinterpret_cast<LPARAM>( &bFound ), 0 );
+	::ReleaseDC( nullptr, hdc );
+	return bFound;
+}
+
+} // namespace
+
 /*! 見出し用のフォントを作り直す（【自前改造】）
 
-	升目の高さ（文字の高さ＋行間）に収まる範囲で、段ごとに背を高くする。
+	升目の高さ（文字の高さ＋行間）に収まる範囲で、段ごとに背を高くして**太字**にする。
 	🔥 幅は升目の半角幅で固定する。ここを 0（おまかせ）にすると背が高いぶん横にも太り、
 	   隣の字と重なって読めなくなる。
 */
@@ -1100,33 +1129,40 @@ void CEditView::UpdateHeadingFonts()
 		return;
 	}
 	const LOGFONT lf = GetFontset().GetLogfont();
+
+	// 見出しの書体。入っていなければ本文と同じ書体で我慢する
+	// （毎回数えなくてよいので、一度調べたら覚えておく）
+	static const bool bHasHeadFace = MdIsFontInstalled( MD_HEADING_FACE );
+
 	for( int i = 0; i < 3; ++i ){
 		int nHeight = (int)( nCharH * MD_HEADING_SCALE[i] );
+		if( nHeight < nCharH ){
+			nHeight = nCharH;		// 本文より小さくはしない
+		}
 		if( nLineH < nHeight ){
 			nHeight = nLineH;		// 行からはみ出して上下が欠けないようにする
 		}
-		if( nHeight <= nCharH ){
-			continue;				// 大きくならないなら素のままでよい
-		}
 		LOGFONT lfHead = lf;
+		if( bHasHeadFace ){
+			::wcscpy_s( lfHead.lfFaceName, MD_HEADING_FACE );
+		}
 		lfHead.lfHeight = -nHeight;	// 負＝文字そのものの高さ
 		// 🔥 lfWidth は升目の半角幅で固定する（横にはみ出させない）。
 		//    0（おまかせ）にすると背が高いぶん横にも太り、**漢字が隣と重なって読めない**。
-		//    固定すると少し縦長になるが、1.25倍なら歪みは14%程度で気にならない
-		//    （1.5倍だと33%歪んで「キモい」見た目になった。2026-09-01 実測）。
 		lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth();
 		// 🔥 輪郭から描かせる。ＭＳ ゴシックのような字は小さい大きさ用の
 		//    「絵（ビットマップ）」を持っていて、既定の品質だとそれを引き伸ばす。
-		//    引き伸ばした絵は線の太さがバラついて**インクが滲んだように見える**
-		//    （2026-09-01 本人から指摘）。ここを指定すると輪郭から描き直してくれる。
+		//    引き伸ばした絵は線の太さがバラついて**インクが滲んだように見える**。
 		lfHead.lfQuality = CLEARTYPE_QUALITY;
-		// 🔥 太字にしない。画数の多い漢字（戦・略・業…）は、この大きさで太らせると
-		//    線どうしがくっついて**インクが滲んだように見える**（2026-09-01 本人から指摘）。
-		//    大きさだけで見出しだと分かるので、太らせる必要が無い。
-		lfHead.lfWeight = FW_NORMAL;
+		// 🔥 太字にする（本人指示 2026-09-01・ふたMEMO に合わせる）。
+		//    ⚠ **書体を選ばずに太字にすると潰れる。** ＭＳ ゴシックは
+		//    1.20倍以上だと太字の指定がそもそも効かず、効く大きさでは漢字が潰れた。
+		//    書体の選定理由は util/markdown.h の MD_HEADING_FACE を見ること。
+		lfHead.lfWeight = FW_BOLD;
 		m_hFontHeading[i] = ::CreateFontIndirect( &lfHead );
 	}
 }
+
 
 void CEditView::DeleteHeadingFonts()
 {
