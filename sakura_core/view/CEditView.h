@@ -108,6 +108,19 @@ private:
 	using CTextAreaHolder = std::unique_ptr<CTextArea>;
 
 public:
+	// 【自前改造】Markdown の見出しを大きく描くためのフォント（3段ぶん）
+	//   ⚠ 幅は升目のまま・高さだけ伸ばす（＝少し縦長）。こうしないと隣の字と重なる。
+	//      行の高さに収まる範囲でしか大きくできないので、.md のときだけ行間を広げている。
+	HFONT GetHeadingFont( int nLevel ) const {
+		return ( 1 <= nLevel && nLevel <= 3 ) ? m_hFontHeading[nLevel - 1] : nullptr;
+	}
+private:
+	void UpdateHeadingFonts();
+	bool IsMarkdownDocument() const;
+	void DeleteHeadingFonts();
+	HFONT m_hFontHeading[3] = { nullptr, nullptr, nullptr };
+public:
+
 	const CEditDoc* GetDocument() const
 	{
 		return m_pcEditDoc;

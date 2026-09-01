@@ -168,6 +168,7 @@
     <ClInclude Include="..\sakura_core\agent\CBackupAgent.h" />
     <ClInclude Include="..\sakura_core\agent\CNoteHistoryAgent.h" />
     <ClInclude Include="..\sakura_core\util\notehistory.h" />
+    <ClInclude Include="..\sakura_core\util\markdown.h" />
     <ClInclude Include="..\sakura_core\env\CCodeChecker.h" />
     <ClInclude Include="..\sakura_core\env\CDataProfile.h" />
     <ClInclude Include="..\sakura_core\env\CDicMgr.h" />

@@ -23,6 +23,7 @@
 */
 
 #include "StdAfx.h"
+#include "util/markdown.h"	// 【自前改造】見出しを大きく描く
 #include <limits.h>
 #include "view/CEditView.h"
 #include "view/CViewFont.h"
@@ -360,6 +361,7 @@ BOOL CEditView::Create(
 
 CEditView::~CEditView()
 {
+	DeleteHeadingFonts();	// 【自前改造】見出し用フォントの後始末
 	Close();
 }
 
@@ -1073,6 +1075,56 @@ void CEditView::OnKillFocus( void )
 //                           設定                              //
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 
+/*! いま開いているのが Markdown か（【自前改造】） */
+bool CEditView::IsMarkdownDocument() const
+{
+	const CEditDoc* pcDoc = CEditDoc::GetInstance(0);
+	return ( nullptr != pcDoc ) && IsMarkdownPath( pcDoc->m_cDocFile.GetFilePath() );
+}
+
+/*! 見出し用のフォントを作り直す（【自前改造】）
+
+	升目の高さ（文字の高さ＋行間）に収まる範囲で、段ごとに背を高くする。
+	🔥 幅は升目の半角幅で固定する。ここを 0（おまかせ）にすると背が高いぶん横にも太り、
+	   隣の字と重なって読めなくなる。
+*/
+void CEditView::UpdateHeadingFonts()
+{
+	DeleteHeadingFonts();
+	if( m_bMiniMap || !IsMarkdownDocument() ){
+		return;		// ミニマップと Markdown 以外は素のまま
+	}
+	const int nCharH  = GetTextMetrics().GetHankakuHeight();
+	const int nCharW  = GetTextMetrics().GetHankakuWidth();
+	const int nLineH  = GetTextMetrics().GetHankakuDy();
+	const int nRoom   = nLineH - nCharH;		// 行間として空いているぶん
+	if( nRoom <= 0 || nCharH <= 0 ){
+		return;
+	}
+	LOGFONT lf = GetFontset().GetLogfont();
+	for( int i = 0; i < 3; ++i ){
+		const int nAdd = (int)( nRoom * MD_HEADING_RATIO[i] );
+		if( nAdd <= 0 ){
+			continue;
+		}
+		LOGFONT lfHead = lf;
+		lfHead.lfHeight = -( nCharH + nAdd );	// 負＝文字の高さそのもの
+		lfHead.lfWidth  = nCharW;				// 升目からはみ出させない
+		lfHead.lfWeight = FW_BOLD;
+		m_hFontHeading[i] = ::CreateFontIndirect( &lfHead );
+	}
+}
+
+void CEditView::DeleteHeadingFonts()
+{
+	for( int i = 0; i < 3; ++i ){
+		if( nullptr != m_hFontHeading[i] ){
+			::DeleteObject( m_hFontHeading[i] );
+			m_hFontHeading[i] = nullptr;
+		}
+	}
+}
+
 /* フォントの変更 */
 void CEditView::SetFont()
 {
@@ -1083,10 +1135,21 @@ void CEditView::SetFont()
 	if( m_bMiniMap ){
 		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), 0, 0);
 	}else{
-		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), DpiScaleY(m_pTypeData->m_nLineSpace), DpiScaleX(m_pTypeData->m_nColumnSpace));
+		// 🔥【自前改造】Markdown のときは行間を広げる。
+		//    見出しを大きく描くには「その行に入る高さ」が要るが、サクラは全行が同じ高さなので、
+		//    文書ぜんぶの行間を広げてしか場所を作れない。∴ .md のときだけ広げる。
+		//    （全行そろって広がるので、レイアウトの計算は今までどおり。ここが「こじ開け」の要）
+		int nLineSpace = m_pTypeData->m_nLineSpace;
+		if( IsMarkdownDocument() ){
+			nLineSpace += MD_EXTRA_LINE_SPACE;
+		}
+		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), DpiScaleY(nLineSpace), DpiScaleX(m_pTypeData->m_nColumnSpace));
 	}
 
 	hdc = nullptr;
+
+	// 見出し用のフォントを作り直す（升目の大きさが決まったあとで作る）
+	UpdateHeadingFonts();
 
 	// エリア情報を更新
 	GetTextArea().UpdateAreaMetrics();

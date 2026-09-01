@@ -478,6 +478,13 @@ void CEditView::SetCurrentColor( CGraphics& gr, EColorIndexType eColorIndex,  EC
 	SFONT sFont;
 	sFont.m_sFontAttr = (info.m_sColorAttr.m_cTEXT != info.m_sColorAttr.m_cBACK) ? info.m_sFontAttr : info2.m_sFontAttr;
 	sFont.m_hFont = GetFontset().ChooseFontHandle( 0, sFont.m_sFontAttr );
+	// 【自前改造】Markdown の見出しは、行の高さいっぱいの大きい字で描く
+	if( COLORIDX_MDHEAD1 <= eColorIndex && eColorIndex <= COLORIDX_MDHEAD3 ){
+		const HFONT hHead = GetHeadingFont( (int)(eColorIndex - COLORIDX_MDHEAD1) + 1 );
+		if( nullptr != hHead ){
+			sFont.m_hFont = hHead;
+		}
+	}
 	gr.SetMyFont(sFont);
 }
 
