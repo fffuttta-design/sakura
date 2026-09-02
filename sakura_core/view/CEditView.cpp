@@ -1138,11 +1138,13 @@ int CEditView::CalcHeadingHeight( int nLevel ) const
 	return nHeight;
 }
 
-/*! カーソルのある行が見出しなら、その文字の高さを返す（【自前改造】）
+/*! カーソルのある行の見出しの段（1〜3）（【自前改造】）
 
-	カーソルの縦棒を見出しの大きさにそろえるために使う。
+	見出しの行でなければ 0。
+	🔥 **段を調べる場所はここだけ。** カーソルの高さと、IMEの未確定文字（入力中の文字）の
+	   フォントが別々に判定すると、変換を確定した瞬間に大きさが変わって見える。
 */
-int CEditView::GetHeadingHeightAtCaret() const
+int CEditView::GetHeadingLevelAtCaret() const
 {
 	if( m_bMiniMap || !IsMarkdownDocument() ){
 		return 0;
@@ -1161,49 +1163,73 @@ int CEditView::GetHeadingHeightAtCaret() const
 	if( !MdParseHeading( pLine, nLineLen, &nLevel, nullptr ) ){
 		return 0;
 	}
-	return CalcHeadingHeight( nLevel );
+	return nLevel;
 }
 
-/*! 見出し用のフォントを作り直す（【自前改造】）
+/*! カーソルのある行が見出しなら、その文字の高さを返す（【自前改造】）
+
+	カーソルの縦棒を見出しの大きさにそろえるために使う。
+*/
+int CEditView::GetHeadingHeightAtCaret() const
+{
+	return CalcHeadingHeight( GetHeadingLevelAtCaret() );	// 見出しでなければ 0 が返る
+}
+
+/*! 見出しの字（LOGFONT）を組み立てる（【自前改造】）
+
+	🔥 **見出しの字の作り方はここ1か所。**
+	   画面に描くフォント（UpdateHeadingFonts）と、IMEの未確定文字のフォント
+	   （SetIMECompFormFont）で同じ物を使う。別々に組み立てると、
+	   入力中と確定後で字が変わって見える。
 
 	升目の高さ（文字の高さ＋行間）に収まる範囲で、段ごとに背を高くして**太字**にする。
-	🔥 幅は升目の半角幅で固定する。ここを 0（おまかせ）にすると背が高いぶん横にも太り、
-	   隣の字と重なって読めなくなる。
 */
+bool CEditView::MakeHeadingLogfont( int nLevel, LOGFONT* pOut ) const
+{
+	if( nullptr == pOut ){
+		return false;
+	}
+	const int nHeight = CalcHeadingHeight( nLevel );	// 高さの式は1か所（CalcHeadingHeight）
+	if( nHeight <= 0 ){
+		return false;
+	}
+	// 見出しの書体。入っていなければ本文と同じ書体で我慢する
+	// （毎回数えなくてよいので、一度調べたら覚えておく）
+	static const bool bHasHeadFace = MdIsFontInstalled( MD_HEADING_FACE );
+
+	LOGFONT lfHead = GetFontset().GetLogfont();
+	if( bHasHeadFace ){
+		::wcscpy_s( lfHead.lfFaceName, MD_HEADING_FACE );
+	}
+	lfHead.lfHeight = -nHeight;	// 負＝文字そのものの高さ
+	// 🔥 lfWidth は升目の半角幅で固定する（横にはみ出させない）。
+	//    0（おまかせ）にすると背が高いぶん横にも太り、**漢字が隣と重なって読めない**。
+	lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth();
+	// 🔥 輪郭から描かせる。ＭＳ ゴシックのような字は小さい大きさ用の
+	//    「絵（ビットマップ）」を持っていて、既定の品質だとそれを引き伸ばす。
+	//    引き伸ばした絵は線の太さがバラついて**インクが滲んだように見える**。
+	lfHead.lfQuality = CLEARTYPE_QUALITY;
+	// 🔥 太字にする（本人指示 2026-09-01・ふたMEMO に合わせる）。
+	//    ⚠ **書体を選ばずに太字にすると潰れる。** ＭＳ ゴシックは
+	//    1.20倍以上だと太字の指定がそもそも効かず、効く大きさでは漢字が潰れた。
+	//    書体の選定理由は util/markdown.h の MD_HEADING_FACE を見ること。
+	lfHead.lfWeight = FW_BOLD;
+	*pOut = lfHead;
+	return true;
+}
+
+/*! 見出し用のフォントを作り直す（【自前改造】） */
 void CEditView::UpdateHeadingFonts()
 {
 	DeleteHeadingFonts();
 	if( m_bMiniMap || !IsMarkdownDocument() ){
 		return;		// ミニマップと Markdown 以外は素のまま
 	}
-	const LOGFONT lf = GetFontset().GetLogfont();
-
-	// 見出しの書体。入っていなければ本文と同じ書体で我慢する
-	// （毎回数えなくてよいので、一度調べたら覚えておく）
-	static const bool bHasHeadFace = MdIsFontInstalled( MD_HEADING_FACE );
-
 	for( int i = 0; i < 3; ++i ){
-		const int nHeight = CalcHeadingHeight( i + 1 );	// 高さの式は1か所（CalcHeadingHeight）
-		if( nHeight <= 0 ){
+		LOGFONT lfHead;
+		if( !MakeHeadingLogfont( i + 1, &lfHead ) ){
 			continue;
 		}
-		LOGFONT lfHead = lf;
-		if( bHasHeadFace ){
-			::wcscpy_s( lfHead.lfFaceName, MD_HEADING_FACE );
-		}
-		lfHead.lfHeight = -nHeight;	// 負＝文字そのものの高さ
-		// 🔥 lfWidth は升目の半角幅で固定する（横にはみ出させない）。
-		//    0（おまかせ）にすると背が高いぶん横にも太り、**漢字が隣と重なって読めない**。
-		lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth();
-		// 🔥 輪郭から描かせる。ＭＳ ゴシックのような字は小さい大きさ用の
-		//    「絵（ビットマップ）」を持っていて、既定の品質だとそれを引き伸ばす。
-		//    引き伸ばした絵は線の太さがバラついて**インクが滲んだように見える**。
-		lfHead.lfQuality = CLEARTYPE_QUALITY;
-		// 🔥 太字にする（本人指示 2026-09-01・ふたMEMO に合わせる）。
-		//    ⚠ **書体を選ばずに太字にすると潰れる。** ＭＳ ゴシックは
-		//    1.20倍以上だと太字の指定がそもそも効かず、効く大きさでは漢字が潰れた。
-		//    書体の選定理由は util/markdown.h の MD_HEADING_FACE を見ること。
-		lfHead.lfWeight = FW_BOLD;
 		m_hFontHeading[i] = ::CreateFontIndirect( &lfHead );
 	}
 }

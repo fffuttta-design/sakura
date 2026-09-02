@@ -123,6 +123,7 @@ public:
 	void Command_REDO( void );				/* やり直し(Redo) */
 	void Command_DELETE( void );			/* カーソル位置または選択エリアを削除 */
 	void Command_DELETE_BACK( void );		/* カーソル前を削除 */
+	bool DeleteBack_MdHeadingMarker( void );	/* 【自前改造】見出しの頭で BackSpace → 見出しをやめる */
 	void Command_WordDeleteToStart( void );	/* 単語の左端まで削除 */
 	void Command_WordDeleteToEnd( void );	/* 単語の右端まで削除 */
 	void Command_WordCut( void );			/* 単語切り取り */

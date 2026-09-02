@@ -119,11 +119,18 @@ public:
 	//! 【自前改造】カーソルのある行が見出しなら、その文字の高さ。違えば 0
 	//   カーソルの縦棒を見出しの大きさにそろえるため CCaret から呼ぶ
 	int GetHeadingHeightAtCaret() const;
+	//! 【自前改造】カーソルのある行の見出しの段（1〜3）。見出しでなければ 0
+	int GetHeadingLevelAtCaret() const;
 private:
 	void UpdateHeadingFonts();
+	//! 【自前改造】見出しの字（LOGFONT）を組み立てる。画面とIMEで共用する
+	bool MakeHeadingLogfont( int nLevel, LOGFONT* pOut ) const;
 	bool IsMarkdownDocument() const;
 	void DeleteHeadingFonts();
 	HFONT m_hFontHeading[3] = { nullptr, nullptr, nullptr };
+	//! 【自前改造】いまIMEに渡してある字の段（0＝本文／-1＝まだ渡していない）
+	//   カーソルが動くたびにIMEを触らないための覚え書き
+	int m_nImeFontLevel = -1;
 public:
 
 	const CEditDoc* GetDocument() const
@@ -333,6 +340,7 @@ public:
 public:
 	void SetIMECompFormPos( void );								/* IME編集エリアの位置を変更 */
 	void SetIMECompFormFont( void );							/* IME編集エリアの表示フォントを変更 */
+	void UpdateIMECompFormFont( void );							/* 【自前改造】未確定文字の字を、いまの行に合わせる */
 
 	// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 	//                       テキスト選択                          //

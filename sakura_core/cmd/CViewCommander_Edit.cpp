@@ -881,6 +881,84 @@ void CViewCommander::Command_DELETE( void )
 }
 
 //カーソル前を削除
+/*! 【自前改造】Markdown の見出しの頭で BackSpace を押したら、見出しをやめる
+
+	ふたMEMO と同じ振る舞い。見出しの1文字目の手前で BackSpace を押したときは、
+	上の行とつなぐのではなく、まず**見出し記号（`#` とうしろの空白）を消して本文に戻す**。
+
+	🔥 **行頭の `#` は幅ゼロなので、画面の桁（レイアウト）ではその範囲を指せない。**
+	   サクラの編集は最終的にレイアウトの範囲で位置を決める（`ReplaceData_CLayoutMgr`）ため、
+	   ふつうの削除では記号が1文字も消えない。とくに**ファイルの1行目**は「上の行」も無いので、
+	   BackSpace が何も起こさず、記号を消す手が無かった（2026-09-02 本人から指摘）。
+	   ∴ ここだけ**論理位置のまま直に消す道**（bFastMode）を通り、そのあとレイアウトを作り直す。
+	   作り直しは Undo と同じ流れ（`Command_UNDO` の bFastMode 後処理）に合わせてある。
+
+	@return 見出し記号を消したら true（＝BackSpace はここで完了）
+*/
+bool CViewCommander::DeleteBack_MdHeadingMarker( void )
+{
+	if( !GetDocument()->IsMarkdownDocument() ){
+		return false;
+	}
+	const CLogicPoint ptCaretLogic = GetCaret().GetCaretLogicPos();
+	const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( ptCaretLogic.GetY2() );
+	if( nullptr == pcDocLine ){
+		return false;
+	}
+	CLogicInt nLen = CLogicInt(0);
+	const wchar_t* pLine = pcDocLine->GetDocLineStrWithEOL( &nLen );
+	int nTextStart = 0;
+	if( nullptr == pLine || !MdParseHeading( pLine, (int)nLen, nullptr, &nTextStart ) ){
+		return false;
+	}
+	// 記号は幅ゼロなので、カーソルは記号の直後（＝本文の頭）にしか置けない。
+	// そこより右にいるなら、ふつうの1文字削除に任せる。
+	if( CLogicInt(nTextStart) < ptCaretLogic.GetX2() ){
+		return false;
+	}
+
+	CLayoutMgr& cLayoutMgr = GetDocument()->m_cLayoutMgr;
+	const CLayoutInt nViewTopLine = m_pCommanderView->GetTextArea().GetViewTopLine();
+	const CLayoutInt nViewLeftCol = m_pCommanderView->GetTextArea().GetViewLeftCol();
+
+	// 行頭の記号だけを消す（論理位置で直に）
+	CLogicRange sDelRange;
+	sDelRange.SetFrom( CLogicPoint( CLogicInt(0), ptCaretLogic.GetY2() ) );
+	sDelRange.SetTo(   CLogicPoint( CLogicInt(nTextStart), ptCaretLogic.GetY2() ) );
+	m_pCommanderView->ReplaceData_CEditView2(
+		sDelRange,
+		L"",
+		CLogicInt(0),
+		false,		// ここでは描かない（レイアウトを作り直したあとで描く）
+		m_pCommanderView->m_bDoing_UndoRedo ? nullptr : GetOpeBlk(),
+		true		// bFastMode＝レイアウトを通さず論理位置で消す
+	);
+
+	// レイアウトを作り直す（幅ゼロだった記号が無くなり、行の見え方が変わるため）
+	cLayoutMgr._DoLayout( false );
+	GetEditWindow()->ClearViewCaretPosInfo();
+	if( GetDocument()->m_nTextWrapMethodCur == WRAP_NO_TEXT_WRAP ){
+		// CLayoutMgr::_DoLayoutにて長さ算出済みなのでbCalLineLen=FALSE指定
+		cLayoutMgr.CalculateTextWidth( FALSE );
+	}else{
+		cLayoutMgr.ClearLayoutLineWidth();
+	}
+	m_pCommanderView->GetTextArea().SetViewTopLine( nViewTopLine );
+	m_pCommanderView->GetTextArea().SetViewLeftCol( nViewLeftCol );
+
+	// カーソルは、いま本文だったところ（＝行頭）へ
+	CLayoutPoint ptNew;
+	cLayoutMgr.LogicToLayout( CLogicPoint( CLogicInt(0), ptCaretLogic.GetY2() ), &ptNew );
+	GetCaret().MoveCursor( ptNew, true );
+	GetCaret().m_nCaretPosX_Prev = GetCaret().GetCaretLayoutPos().GetX2();
+
+	m_pCommanderView->AdjustScrollBars();
+	m_pCommanderView->Call_OnPaint( PAINT_LINENUMBER | PAINT_BODY | PAINT_RULER, false );
+	GetCaret().ShowCaretPosInfo();
+	GetEditWindow()->RedrawAllViews( m_pCommanderView );	// 他のペインの表示も更新
+	return true;
+}
+
 void CViewCommander::Command_DELETE_BACK( void )
 {
 	if( m_pCommanderView->GetSelectionInfo().IsMouseSelecting() ){	/* マウスによる範囲選択中 */
@@ -892,6 +970,9 @@ void CViewCommander::Command_DELETE_BACK( void )
 	//GetDocument()->m_cDocEditor.SetModified(true,true);	//	Jan. 22, 2002 genta
 	if( m_pCommanderView->GetSelectionInfo().IsTextSelected() ){				/* テキストが選択されているか */
 		m_pCommanderView->DeleteData( true );
+	}
+	else if( DeleteBack_MdHeadingMarker() ){
+		// 【自前改造】見出しの頭 → 見出しをやめる（記号を消した）。ここで完了
 	}
 	else{
 		CLayoutPoint	ptLayoutPos_Old = GetCaret().GetCaretLayoutPos();

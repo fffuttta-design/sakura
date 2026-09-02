@@ -72,15 +72,26 @@ void CEditView::SetIMECompFormPos( void )
 	// composition window position.
 	//
 	//
+	// 【自前改造】入力中（未確定）の文字も、その行の見え方に合わせる。
+	//   カーソルが動くたびにここへ来るので、段が変わったときだけ IME を触る。
+	UpdateIMECompFormFont();
+
 	HIMC hIMC = ::ImmGetContext( GetHwnd() );
 	if ( hIMC ){
 		if ( ::ImmGetOpenStatus( hIMC ) ){
 			POINT point;
 			::GetCaretPos( &point );
+			// 未確定文字は「カーソルの下端にそろえる」形で置く。
+			//   🔥【自前改造】見出しの行では未確定文字も大きいので、本文の高さで引くと
+			//      その差のぶん下へずれる。∴ **いま IME に渡してある字の高さ**で引く。
+			const int nLevel = GetHeadingLevelAtCaret();
+			const int nImeCharHeight = ( 0 < nLevel )
+				? CalcHeadingHeight( nLevel )
+				: GetTextMetrics().GetHankakuHeight();
 			COMPOSITIONFORM CompForm;
 			CompForm.dwStyle = CFS_POINT;
 			CompForm.ptCurrentPos.x = (long) point.x;
-			CompForm.ptCurrentPos.y = (long) point.y + GetCaret().GetCaretSize().cy - GetTextMetrics().GetHankakuHeight();
+			CompForm.ptCurrentPos.y = (long) point.y + GetCaret().GetCaretSize().cy - nImeCharHeight;
 			::ImmSetCompositionWindow( hIMC, &CompForm );
 		}
 		::ImmReleaseContext( GetHwnd() , hIMC );
@@ -97,11 +108,33 @@ void CEditView::SetIMECompFormFont( void )
 	// composition window position.
 	//
 	//
+	// 【自前改造】Markdown の見出しの行では、**入力中（未確定）の文字も見出しの字**で出す。
+	//   未確定文字を描いているのは IME 自身で、こちらの描画は通らない。
+	//   ∴ フォントを渡してやらないと、確定した瞬間だけ大きくなる（ふたMEMO と違う見え方になる）。
+	const int nLevel = GetHeadingLevelAtCaret();
+	LOGFONT lf = GetEditWnd().GetLogfont();
+	if( 0 < nLevel ){
+		MakeHeadingLogfont( nLevel, &lf );	// 作れなければ本文の字のまま
+	}
 	HIMC	hIMC = ::ImmGetContext( GetHwnd() );
 	if ( hIMC ){
-		::ImmSetCompositionFont( hIMC, const_cast<LOGFONT *>(&(GetEditWnd().GetLogfont())) );
+		::ImmSetCompositionFont( hIMC, &lf );
+		m_nImeFontLevel = nLevel;
 	}
 	::ImmReleaseContext( GetHwnd() , hIMC );
+}
+
+/*! 未確定文字の字を、いまカーソルがある行に合わせる（【自前改造】）
+
+	カーソルが動くたびに呼ばれるので、**段が変わったときだけ** IME に渡し直す。
+	毎回渡すと、変換中に IME の状態を触ることになって落ち着かない。
+*/
+void CEditView::UpdateIMECompFormFont( void )
+{
+	if( GetHeadingLevelAtCaret() == m_nImeFontLevel ){
+		return;
+	}
+	SetIMECompFormFont();
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
