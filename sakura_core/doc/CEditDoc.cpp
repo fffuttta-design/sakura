@@ -859,25 +859,23 @@ void CEditDoc::OnChangeSetting(
 
 	@retval TRUE: 終了して良い / FALSE: 終了しない
 */
-/*! メモ（.md）を、確認を出さずに上書き保存する（【自前改造】）
+/*! 確認を出さずに上書き保存する（【自前改造】・自動保存の入口）
 
-	自動保存の入口。呼ばれる場所は3つ:
-	  1. 手が止まったとき  … `CAutoSaveAgent::CheckMdAutoSave()`（500ms ごとの見回り）
+	呼ばれる場所は3つ:
+	  1. 手が止まったとき  … `CAutoSaveAgent::CheckIdleAutoSave()`（500ms ごとの見回り）
 	  2. 窓から離れたとき  … `CEditView::OnKillFocus()`
 	  3. 閉じるとき        … `CEditDoc::OnFileClose()`（保存確認を出す前）
 
-	🔥 **対象は「名前が付いている .md」だけ。**
-	   無題の文書を勝手にファイルにはしない（Ctrl+S＝クイック退避で名前が付いてから対象になる）。
-	   .md 以外を黙って書き換えないのも大事。設定を見に来ただけの ini やソースを、
-	   触った拍子に上書きしてしまうため。
+	🔥 **対象は「名前が付いている文書」すべて**（拡張子は問わない。2026-09-02 本人指示）。
+	   無題の文書だけは対象外＝勝手にファイルを作らない
+	   （Ctrl+S＝クイック退避で名前が付いてから対象になる）。
+	   ⚠ 見るだけのつもりで開いたファイルも、書き換えれば保存される。
+	      触られたくないものは**ビューモード**（読み取り専用）で開くこと。
 
 	@return 保存したら true
 */
 bool CEditDoc::AutoSaveIfNeeded()
 {
-	if( !IsMarkdownDocument() ){
-		return false;
-	}
 	if( !m_cDocEditor.IsModified() ){
 		return false;		// 変わっていないなら書かない
 	}
@@ -915,7 +913,7 @@ BOOL CEditDoc::OnFileClose(bool bGrepNoConfirm)
 			return TRUE;
 		}
 	}else{
-		// 【自前改造】メモ（.md）は閉じるときも黙って保存する。
+		// 【自前改造】閉じるときも黙って保存する。
 		//   手が止まってから保存する作りなので、書いた直後に閉じるとまだ保存されていない。
 		//   ここで保存しておけば「保存しますか？」が出ずに閉じられる＝ふたMEMO と同じ。
 		AutoSaveIfNeeded();

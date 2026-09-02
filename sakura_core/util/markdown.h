@@ -51,14 +51,6 @@ constexpr const WCHAR* MD_HEADING_FACE = L"BIZ UDゴシック";
 */
 constexpr double MD_LINE_HEIGHT_SCALE = 1.52;
 
-//! 【自前改造】メモを自動保存するまでの「手が止まっている時間」(ミリ秒)
-/*!
-	打鍵のたびに保存すると、置き場所（Googleドライブ）の同期が休みなく走る。
-	∴ **入力が止まってから**保存する。長い文章を書いている間は保存されない。
-	⚠ 短くしすぎると変換の途中でも保存が走る。3秒は「一息ついた」と言える長さ。
-*/
-constexpr DWORD MD_AUTOSAVE_IDLE_MS = 3000;
-
 //! 拡張子が Markdown か
 inline bool IsMarkdownPath( const WCHAR* pszPath )
 {

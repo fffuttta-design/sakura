@@ -21,6 +21,14 @@
 //! 分→ミリ秒に変換するための係数
 const int MSec2Min = 1000 * 60;
 
+//! 【自前改造】自動保存するまでの「手が止まっている時間」(ミリ秒)
+/*!
+	打鍵のたびに保存すると、置き場所（Googleドライブ）の同期が休みなく走る。
+	∴ **入力が止まってから**保存する。長い文章を書いている間は保存されない。
+	⚠ 短くしすぎると変換の途中でも保存が走る。3秒は「一息ついた」と言える長さ。
+*/
+constexpr DWORD AUTOSAVE_IDLE_MS = 3000;
+
 /*! @class CPassiveTimer CAutoSave.h
 	基準時刻からの経過時間が設定間隔を過ぎたかどうかを判定する。
 	頻繁に呼び出されるタイマーが既に別の場所にあるとき、それよりも間隔が広くて
@@ -58,14 +66,14 @@ public:
 	void CheckAutoSave();
 	void ReloadAutoSaveParam();	//!< 設定をSharedAreaから読み出す
 
-	//! 【自前改造】メモ（.md）を「手が止まったら」保存する。500ms ごとに呼ばれる
-	void CheckMdAutoSave();
+	//! 【自前改造】「手が止まったら」保存する。500ms ごとに呼ばれる
+	void CheckIdleAutoSave();
 
 private:
 	CPassiveTimer m_cPassiveTimer;
 	//! 【自前改造】保存に失敗したときの打鍵時刻。次に書き換えられるまで再挑戦しない
 	//   （読み取り専用などで失敗すると、0.5秒ごとにエラーが出続けてしまうため）
-	DWORD m_dwMdFailedTick = 0;
-	bool  m_bMdSaveFailed  = false;
+	DWORD m_dwIdleFailedTick = 0;
+	bool  m_bIdleSaveFailed  = false;
 };
 #endif /* SAKURA_CAUTOSAVEAGENT_AB1DD112_42B8_4A93_8E04_C2889F16DC53_H_ */

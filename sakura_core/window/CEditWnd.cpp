@@ -4350,8 +4350,8 @@ void CEditWnd::OnEditTimer( void )
 	}
 
 	GetDocument()->m_cAutoSaveAgent.CheckAutoSave();
-	// 【自前改造】メモ（.md）は手が止まったら勝手に保存する
-	GetDocument()->m_cAutoSaveAgent.CheckMdAutoSave();
+	// 【自前改造】手が止まったら勝手に保存する
+	GetDocument()->m_cAutoSaveAgent.CheckIdleAutoSave();
 }
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //

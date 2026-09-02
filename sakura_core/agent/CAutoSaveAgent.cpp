@@ -15,7 +15,6 @@
 #include "agent/CAutoSaveAgent.h"
 #include "doc/CEditDoc.h"
 #include "env/DLLSHAREDATA.h"
-#include "util/markdown.h"	// 【自前改造】MD_AUTOSAVE_IDLE_MS
 
 //	From Here Aug. 21, 2000 genta
 //
@@ -42,36 +41,36 @@ void CAutoSaveAgent::CheckAutoSave()
 	}
 }
 
-/*! メモ（.md）を「手が止まったら」保存する（【自前改造】）
+/*! 「手が止まったら」保存する（【自前改造】）
 
-	500ms ごとに呼ばれる。**打鍵が止まってから `MD_AUTOSAVE_IDLE_MS` 経つまで保存しない**ので、
+	500ms ごとに呼ばれる。**打鍵が止まってから `AUTOSAVE_IDLE_MS` 経つまで保存しない**ので、
 	書いている最中に書き込みが走らない。
 
 	🔥 サクラに元からある自動保存（共通設定→バックアップ）とは別物。
-	   あちらは「分」単位・全ファイル・設定でON/OFF。こちらは .md のメモ専用で常に効く。
+	   あちらは「分」単位で、設定でON/OFFする。こちらは設定を持たず常に効く。
 */
-void CAutoSaveAgent::CheckMdAutoSave()
+void CAutoSaveAgent::CheckIdleAutoSave()
 {
 	CEditDoc* pcDoc = GetListeningDoc();
 	if( nullptr == pcDoc ){
 		return;
 	}
 	if( !pcDoc->m_cDocEditor.IsModified() ){
-		m_bMdSaveFailed = false;	// 保存された・元に戻された → 失敗の記憶を捨てる
+		m_bIdleSaveFailed = false;	// 保存された・元に戻された → 失敗の記憶を捨てる
 		return;
 	}
 	const DWORD dwEdit = pcDoc->m_cDocEditor.GetLastEditTick();
-	if( m_bMdSaveFailed && m_dwMdFailedTick == dwEdit ){
+	if( m_bIdleSaveFailed && m_dwIdleFailedTick == dwEdit ){
 		return;		// 失敗したまま何も書き換えられていない → 何度も試さない
 	}
-	if( ::GetTickCount() - dwEdit < MD_AUTOSAVE_IDLE_MS ){
+	if( ::GetTickCount() - dwEdit < AUTOSAVE_IDLE_MS ){
 		return;		// まだ手が動いている
 	}
 	if( !pcDoc->AutoSaveIfNeeded() ){
-		// 対象外（.md でない・無題など）でも失敗でも、同じ扱いでよい。
+		// 対象外（無題など）でも失敗でも、同じ扱いでよい。
 		// 次に書き換えられるまで休む＝空振りを 0.5 秒ごとに繰り返さない。
-		m_bMdSaveFailed = true;
-		m_dwMdFailedTick = dwEdit;
+		m_bIdleSaveFailed = true;
+		m_dwIdleFailedTick = dwEdit;
 	}
 }
 

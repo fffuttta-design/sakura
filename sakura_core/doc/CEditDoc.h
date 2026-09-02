@@ -83,9 +83,9 @@ public:
 		   ∴ 答えはここ1か所で持ち、`SetFilePathAndIcon()` で更新する。
 	*/
 	bool IsMarkdownDocument() const { return m_bMarkdown; }
-	//! 【自前改造】メモ（.md）なら、確認を出さずに上書き保存する。保存したら true
+	//! 【自前改造】確認を出さずに上書き保存する（自動保存の入口）。保存したら true
 	/*!
-		対象は「名前が付いている .md」だけ。無題の文書は勝手にファイルを作らない
+		対象は「名前が付いている文書」すべて。無題の文書は勝手にファイルを作らない
 		（Ctrl+S＝クイック退避で名前が付いてから、自動保存の対象になる）。
 	*/
 	bool AutoSaveIfNeeded();
