@@ -36,6 +36,8 @@ public:
 	void SetModified( bool flag, bool redraw);
 	//! ファイルが修正中かどうか
 	bool IsModified() const { return m_bIsDocModified; }
+	//! 【自前改造】最後に本文を書き換えた時刻（GetTickCount）。自動保存が「手が止まったか」を見るのに使う
+	DWORD GetLastEditTick() const { return m_dwLastEditTick; }
 
 	// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 	//                           設定                              //
@@ -75,6 +77,7 @@ public:
 	int				m_nOpeBlkRedawCount;		//!< OpeBlkの再描画非対象数
 	bool			m_bInsMode;					//!< 挿入・上書きモード Oct. 2, 2005 genta
 	bool			m_bIsDocModified;
+	DWORD			m_dwLastEditTick = 0;	//!< 【自前改造】最後に本文を書き換えた時刻
 };
 
 class CDocEditAgent{

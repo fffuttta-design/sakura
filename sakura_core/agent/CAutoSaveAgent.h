@@ -58,7 +58,14 @@ public:
 	void CheckAutoSave();
 	void ReloadAutoSaveParam();	//!< 設定をSharedAreaから読み出す
 
+	//! 【自前改造】メモ（.md）を「手が止まったら」保存する。500ms ごとに呼ばれる
+	void CheckMdAutoSave();
+
 private:
 	CPassiveTimer m_cPassiveTimer;
+	//! 【自前改造】保存に失敗したときの打鍵時刻。次に書き換えられるまで再挑戦しない
+	//   （読み取り専用などで失敗すると、0.5秒ごとにエラーが出続けてしまうため）
+	DWORD m_dwMdFailedTick = 0;
+	bool  m_bMdSaveFailed  = false;
 };
 #endif /* SAKURA_CAUTOSAVEAGENT_AB1DD112_42B8_4A93_8E04_C2889F16DC53_H_ */

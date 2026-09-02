@@ -44,6 +44,13 @@ void CDocEditor::SetModified( bool flag, bool redraw)
 		GetEditWnd().m_cDlgFuncList.NotifyDocModification();
 	}
 
+	// 【自前改造】書き換えた時刻を覚える（自動保存が「手が止まったか」を見るのに使う）。
+	//   🔥 下の「変更がなければ何もしない」より**前**に置くこと。
+	//      2文字目以降は既に modified なのでそこで戻ってしまい、時刻が最初の1文字で止まる。
+	if( flag ){
+		m_dwLastEditTick = ::GetTickCount();
+	}
+
 	if( m_bIsDocModified == flag )	//	変更がなければ何もしない
 		return;
 

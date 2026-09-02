@@ -1041,6 +1041,9 @@ void CEditView::OnKillFocus( void )
 	if( m_bMiniMap ){
 		return;
 	}
+	// 【自前改造】メモ（.md）は、別の窓へ移るときに保存しておく。
+	//   手が止まってからの保存だけだと、書いた直後に他のアプリへ行った分が残らない。
+	GetDocument()->AutoSaveIfNeeded();
 	// 03/02/18 対括弧の強調表示(消去) ai
 	DrawBracketPair( false );
 	m_bDrawBracketPairFlag = FALSE;
