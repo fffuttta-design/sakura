@@ -99,8 +99,10 @@ inline bool MdParseHeading( const wchar_t* pLine, int nLen, int* pnLevel, int* p
 		return false;
 	}
 	int nText = nSharp;
+	// 🔥 全角スペース（U+3000）も空白として数える。日本語入力のスペースキーは全角が入るので、
+	//    半角しか見ないと「# 」と打っても見出しにならない（Android版で実際に踏んだ 2026-09-02）。
 	while( nText < nLen && nText < MD_MARKER_MAX
-	    && ( L' ' == pLine[nText] || L'\t' == pLine[nText] ) ){
+	    && ( L' ' == pLine[nText] || L'\t' == pLine[nText] || L'\u3000' == pLine[nText] ) ){
 		++nText;
 	}
 	// 🔥 空白が1つも無ければ見出しにしない（`#見出し` は素のまま）
