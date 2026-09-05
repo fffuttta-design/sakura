@@ -1251,6 +1251,23 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 		);
 	}
 
+	// 【自前改造】Markdown の区切り線（`--- `）を1本の線として引く。
+	//   文字（`---` と空白）は CColor_MdMarker が背景と同じ色で描いて消してある。
+	//   🔥 行末背景を塗ったあとに引くこと。先に引くと塗りつぶされて消える。
+	if( !m_bMiniMap && pcLayout && 0 == pcLayout->GetLogicOffset() && IsMarkdownDocument() ){
+		const CStringRef cHrStr = CDocLine::GetStringRefWithEOL_Safe( pInfo->GetDocLine() );
+		if( cHrStr.IsValid() && MdIsHorizontalRule( cHrStr.GetPtr(), cHrStr.GetLength() ) ){
+			// 本文の色を背景に溶かした薄い色（線が主張しすぎないように）
+			const COLORREF crHr = MakeColor2( cTextType.GetTextColor(), cBackType.GetBackColor(), 96 );
+			RECT rcHr;
+			rcHr.left   = GetTextArea().GetAreaLeft();
+			rcHr.right  = GetTextArea().GetAreaRight();
+			rcHr.top    = pInfo->m_pDispPos->GetDrawPos().y + nLineHeight / 2;
+			rcHr.bottom = rcHr.top + 1;
+			pInfo->m_gr.FillSolidMyRect( rcHr, crHr );
+		}
+	}
+
 	// 反転描画
 	if( pcLayout && GetSelectionInfo().IsTextSelected() ){
 		DispTextSelected(

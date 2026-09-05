@@ -78,6 +78,12 @@ bool CColor_MdMarker::BeginColor(const CStringRef& cStr, int nPos)
 	if( 0 != nPos ){
 		return false;
 	}
+	// 【自前改造】区切り線（`--- `）は行ぜんぶを消す。
+	//   線そのものは CEditView::DrawLayoutLine が引く（文字は残しつつ見えなくする）。
+	if( cStr.IsValid() && MdIsHorizontalRule( cStr.GetPtr(), cStr.GetLength() ) ){
+		m_nEnd = LineEndPos( cStr );
+		return true;
+	}
 	int nTextStart = 0;
 	if( !ParseHeading( cStr, nullptr, &nTextStart ) ){
 		return false;

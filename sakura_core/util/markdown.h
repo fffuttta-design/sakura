@@ -88,6 +88,50 @@ inline bool IsMarkdownPath( const WCHAR* pszPath )
 */
 constexpr int MD_MARKER_MAX = 16;
 
+//! 空白（半角・タブ・全角）か
+/*!
+	🔥 **全角スペース（U+3000）も数える。** 日本語入力のスペースキーは全角が入るので、
+	   半角しか見ないと打ったとおりにならない（Android版で実際に踏んだ 2026-09-02）。
+*/
+inline bool MdIsSpace( wchar_t c )
+{
+	return ( L' ' == c || L'\t' == c || L'\u3000' == c );
+}
+
+//! その行が区切り線（`--- `）か
+/*!
+	`-` が3つ以上、**そのうしろに空白が1つ以上**、あとは行末まで空白だけ。
+	🔥 **空白で区切り線に切り替わる**（見出しの `# ` と同じ考え方）。
+	   `---` と打っただけでは素の文字のままで、スペースを入れた瞬間に線になる。
+	   ∴ 文中のハイフンの並びを勝手に線にしてしまうことがない。
+	改行記号（CR/LF）は数に入れない。
+*/
+inline bool MdIsHorizontalRule( const wchar_t* pLine, int nLen )
+{
+	if( nullptr == pLine || nLen < 4 || L'-' != pLine[0] ){
+		return false;
+	}
+	int i = 0;
+	while( i < nLen && L'-' == pLine[i] ){
+		++i;
+	}
+	if( i < 3 ){
+		return false;
+	}
+	// うしろは空白が1つ以上。そのあとは行末まで空白だけ
+	int nSpace = 0;
+	for( ; i < nLen; ++i ){
+		if( L'\r' == pLine[i] || L'\n' == pLine[i] ){
+			break;
+		}
+		if( !MdIsSpace( pLine[i] ) ){
+			return false;
+		}
+		++nSpace;
+	}
+	return ( 0 < nSpace );
+}
+
 //! 行頭が見出しなら、段（1～3）と本文の始まる位置を返す
 /*!
 	`#` は 1～6 個。**そのうしろに空白が1つ以上必要**（ふたMEMO と同じ規則）。
@@ -117,8 +161,7 @@ inline bool MdParseHeading( const wchar_t* pLine, int nLen, int* pnLevel, int* p
 	int nText = nSharp;
 	// 🔥 全角スペース（U+3000）も空白として数える。日本語入力のスペースキーは全角が入るので、
 	//    半角しか見ないと「# 」と打っても見出しにならない（Android版で実際に踏んだ 2026-09-02）。
-	while( nText < nLen && nText < MD_MARKER_MAX
-	    && ( L' ' == pLine[nText] || L'\t' == pLine[nText] || L'\u3000' == pLine[nText] ) ){
+	while( nText < nLen && nText < MD_MARKER_MAX && MdIsSpace( pLine[nText] ) ){
 		++nText;
 	}
 	// 🔥 空白が1つも無ければ見出しにしない（`#見出し` は素のまま）
