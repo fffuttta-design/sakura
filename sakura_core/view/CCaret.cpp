@@ -644,7 +644,15 @@ void CCaret::ShowEditCaret()
 	::SetCaretPos( ptDrawPos.x, ptDrawPos.y );
 
 	/* キャレットの表示 */
-	ShowCaret_( m_pEditView->GetHwnd() ); // 2002/07/22 novice
+	// 【自前改造】日本語入力の変換中は出さない。
+	//   未確定の文字は IME 自身がカーソルと同じ位置から描くので、出すと文字に重なる
+	//   （＝カーソルが文字を貫通して見える。2026-09-05 本人から指摘）。
+	//   ⚠ 位置と大きさの更新はここまで通す。IME の窓を追従させるのに要るため。
+	if( m_pEditView->IsImeComposing() ){
+		HideCaret_( m_pEditView->GetHwnd() );
+	}else{
+		ShowCaret_( m_pEditView->GetHwnd() ); // 2002/07/22 novice
+	}
 
 	m_crCaret = crCaret;	//	2006.12.07 ryoji
 	m_pEditView->m_crBack2 = crBack;		//	2006.12.07 ryoji

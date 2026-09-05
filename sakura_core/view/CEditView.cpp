@@ -492,6 +492,14 @@ LRESULT CEditView::DispatchEvent(
 		}
 		return DefWindowProc( hwnd, uMsg, wParam, lParam );
 
+	// 【自前改造】変換が始まったら自前のカーソル（縦棒）を消す。
+	//   未確定の文字は IME 自身が**カーソルと同じ位置から**描くので、
+	//   出したままだと1文字目に重なって「文字を貫通している」ように見える。
+	case WM_IME_STARTCOMPOSITION:
+		m_bImeComposing = true;
+		GetCaret().HideCaret_( hwnd );
+		return DefWindowProc( hwnd, uMsg, wParam, lParam );
+
 	case WM_IME_COMPOSITION:
 		if( IsInsMode() && (lParam & GCS_RESULTSTR)){
 			HIMC hIMC;
@@ -551,6 +559,9 @@ LRESULT CEditView::DispatchEvent(
 
 	case WM_IME_ENDCOMPOSITION:
 		m_szComposition[0] = L'\0';
+		// 【自前改造】変換が終わったらカーソルを出し直す
+		m_bImeComposing = false;
+		GetCaret().ShowEditCaret();
 		return DefWindowProc( hwnd, uMsg, wParam, lParam );
 
 	case WM_IME_CHAR:
@@ -1002,6 +1013,10 @@ void CEditView::OnSetFocus( void )
 	if( m_bMiniMap ){
 		return;
 	}
+	// 【自前改造】焦点が戻ってきた時点で変換は続いていない。
+	//   ここで下ろしておかないと、変換の終わりを取りこぼしたときに
+	//   カーソルが消えたまま戻らなくなる（保険）。
+	m_bImeComposing = false;
 	// 2004.04.02 Moca EOFのみのレイアウト行は、0桁目のみ有効.EOFより下の行のある場合は、EOF位置にする
 	{
 		CLayoutPoint ptPos = GetCaret().GetCaretLayoutPos();
@@ -1135,8 +1150,17 @@ int CEditView::CalcHeadingHeight( int nLevel ) const
 	if( nHeight < nCharH ){
 		nHeight = nCharH;		// 本文より小さくはしない
 	}
-	if( nLineH < nHeight ){
-		nHeight = nLineH;		// 行からはみ出して上下が欠けないようにする
+	// 🔥 升目いっぱいまで許すと、見出しが**次の行の字にくっついて詰まって見える**
+	//    （2026-09-05 本人から指摘）。∴ 下に MD_HEADING_GAP_SCALE ぶんの余白を必ず残す。
+	//    升目の高さ自体がこの余白込みで決まっている（markdown.h）ので、
+	//    ふつうはここで切り詰められることはない＝行間を手で狭められたときの保険。
+	const int nGap = (int)( nCharH * MD_HEADING_GAP_SCALE );
+	int nMax = nLineH - nGap;
+	if( nMax < nCharH ){
+		nMax = nCharH;			// 余白のために本文より小さくはしない
+	}
+	if( nMax < nHeight ){
+		nHeight = nMax;			// 行からはみ出して上下が欠けないようにする
 	}
 	return nHeight;
 }

@@ -121,6 +121,11 @@ public:
 	int GetHeadingHeightAtCaret() const;
 	//! 【自前改造】カーソルのある行の見出しの段（1〜3）。見出しでなければ 0
 	int GetHeadingLevelAtCaret() const;
+	//! 【自前改造】日本語入力の変換中（未確定の文字が出ている最中）か
+	//   🔥 変換中は**自前のカーソル（縦棒）を出さない**。未確定文字を描いているのは IME 自身で、
+	//      その文字はカーソルと同じ位置から右へ伸びる。∴ 消さないとカーソルが1文字目に
+	//      重なって「文字を貫通している」ように見える（2026-09-05 本人から指摘）。
+	bool IsImeComposing() const { return m_bImeComposing; }
 private:
 	void UpdateHeadingFonts();
 	//! 【自前改造】見出しの字（LOGFONT）を組み立てる。画面とIMEで共用する
@@ -131,6 +136,8 @@ private:
 	//! 【自前改造】いまIMEに渡してある字の段（0＝本文／-1＝まだ渡していない）
 	//   カーソルが動くたびにIMEを触らないための覚え書き
 	int m_nImeFontLevel = -1;
+	//! 【自前改造】日本語入力の変換中か（WM_IME_STARTCOMPOSITION 〜 WM_IME_ENDCOMPOSITION）
+	bool m_bImeComposing = false;
 public:
 
 	const CEditDoc* GetDocument() const
