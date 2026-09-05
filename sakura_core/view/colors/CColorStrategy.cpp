@@ -448,8 +448,15 @@ const SColorAttributeData g_ColorAttributeArr[] =
 	{L"MH2", 0},	//【自前改造】Markdown 見出し2
 	{L"MH3", 0},	//【自前改造】Markdown 見出し3
 	{L"MHM", 0},	//【自前改造】Markdown 見出しの # 記号
+	{L"MDL", 0},	//【自前改造】Markdown のリンク
+	{L"MDB", 0},	//【自前改造】Markdown の太字
 	{L"LAST", 0}	// Not Used
 };
+// 🔥 色を1つ足したら**この表にも必ず足す**。ここは ini のキー名（`C[MDL]` など）で、
+//    `IO_ColorSet()` が COLORIDX_LAST 個ぶん読みに来る。足し忘れると範囲外を読んで**起動時に落ちる**
+//    （2026-09-05、太字の色を足したときに実際に踏んだ。落ち方は「制御プロセスだけが即死」で分かりにくい）。
+static_assert( std::size(g_ColorAttributeArr) == size_t(COLORIDX_LAST) + 1,
+	"g_ColorAttributeArr は「色の数＋番兵(LAST)」でなければならない" );
 
 /*
  * カラー名からインデックス番号に変換する
