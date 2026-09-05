@@ -49,11 +49,18 @@ void CTextDrawer::DispText( HDC hdc, DispPos* pDispPos, int marginy, const wchar
 	//文字列のピクセル幅
 	int nTextWidth=pMetrics->CalcTextWidth(pData,nLength,pDxArray);
 
+	// 【自前改造】Markdown の見出しは、升目より上へずらして描く（下に余白を作るため）。
+	//   🔥 クリップも同じだけ上へ広げないと、上へ出た部分が切り落とされる。
+	//   🔥 **塗りつぶし（ETO_OPAQUE）はそのまま使う。** 透明で描くと前の字が消えず、
+	//      スクロールしたときに**二重に見える**（2026-09-05 実際に出た）。
+	//      そのぶん上の行の下端 数px がこの行の背景色で塗られるが、ふつうは同じ色なので見えない。
+	const int nMdLift = m_pEditView->GetDrawingHeadingLift();
+
 	//テキストの描画範囲の矩形を求める -> rcClip
 	CMyRect rcClip;
 	rcClip.left   = x;
 	rcClip.right  = x + nTextWidth;
-	rcClip.top    = y;
+	rcClip.top    = y - nMdLift;
 	rcClip.bottom = y + pMetrics->GetHankakuDy();
 	if( rcClip.left < pArea->GetAreaLeft() ){
 		rcClip.left = pArea->GetAreaLeft();
@@ -62,7 +69,9 @@ void CTextDrawer::DispText( HDC hdc, DispPos* pDispPos, int marginy, const wchar
 	//文字間隔
 	int nDx = pMetrics->GetCharPxWidth();
 
-	if( pArea->IsRectIntersected(rcClip) && rcClip.top >= pArea->GetAreaTop() ){
+	// 🔥【自前改造】上へずらしたぶん（nMdLift）は差し引いて判定する。
+	//    そのまま比べると、いちばん上の行の見出しが「表示域より上」と見なされて**まるごと描かれない**。
+	if( pArea->IsRectIntersected(rcClip) && rcClip.top + nMdLift >= pArea->GetAreaTop() ){
 
 		if( rcClip.Width() > pArea->GetAreaWidth() ){
 			rcClip.right = rcClip.left + pArea->GetAreaWidth();
@@ -124,7 +133,7 @@ void CTextDrawer::DispText( HDC hdc, DispPos* pDispPos, int marginy, const wchar
 		::ExtTextOut(
 			hdc,
 			nDrawX,					//X
-			y + marginy,			//Y
+			y + marginy - nMdLift,	//Y（【自前改造】見出しはそのぶん上へ）
 			ApiWrap::ExtTextOutOption() & ~(bTransparent? ETO_OPAQUE: 0),
 			&rcClip,
 			pDrawData,				//文字列

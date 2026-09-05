@@ -651,6 +651,13 @@ void CEditView::OnPaint2( HDC _hdc, PAINTSTRUCT *pPs, BOOL bDrawFromComptibleBmp
 	int				nLineHeight = GetTextMetrics().GetHankakuDy();
 	int				nCharDx = GetTextMetrics().GetCharPxWidth();
 
+	// 【自前改造】Markdown の見出しは升目より上へはみ出して描く（下に余白を作るため）。
+	//   🔥 1つ上の行だけを描き直すと、そのはみ出しが塗り消されて**見出しの頭が欠ける**。
+	//      ∴ 描き直す範囲を常に1行ぶん下へ広げて、見出しを描き直させる。
+	if( !m_bMiniMap && IsMarkdownDocument() ){
+		pPs->rcPaint.bottom += nLineHeight;
+	}
+
 	//サポート
 	CTypeSupport cTextType(this,COLORIDX_TEXT);
 
@@ -1090,6 +1097,18 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 			bSkipRight = CColorStrategyPool::getInstance()->IsSkipBeforeLayout();
 		}
 	}
+	// 【自前改造】見出しの行は、字を升目より上へずらして描く（下に余白を作るため）。
+	//   🔥 折り返した2行目以降はずらさない（行頭ではないので見出しの字ではない）。
+	//   実際にずらすのは CTextDrawer::DispText。描き終えたら必ず 0 に戻すこと。
+	int nMdLift = 0;
+	if( !m_bMiniMap && pcLayout && 0 == pcLayout->GetLogicOffset() && IsMarkdownDocument() ){
+		int nMdLevel = 0;
+		if( cLineStr.IsValid() && MdParseHeading( cLineStr.GetPtr(), cLineStr.GetLength(), &nMdLevel, nullptr ) ){
+			nMdLift = CalcHeadingLift( nMdLevel );
+			SetDrawingHeadingLift( nMdLift );
+		}
+	}
+
 	//行終端または折り返しに達するまでループ
 	if(pcLayout){
 		int nPosBgn = pInfo->m_nPosInLogic; // Logic
@@ -1170,6 +1189,9 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 		}
 	}
 
+	// 【自前改造】ずらし量を戻す（以降の描画＝EOF記号・行末背景・選択反転は升目どおりに描く）
+	SetDrawingHeadingLift( 0 );
+
 	// 必要ならEOF描画
 	void _DispEOF( CGraphics& gr, DispPos* pDispPos, const CEditView* pcView);
 	if(pcLayout && pcLayout->GetNextLayout()==nullptr && pcLayout->GetLayoutEol().GetLen()==0){
@@ -1194,6 +1216,11 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 	// 行末背景描画
 	RECT rcClip;
 	bool rcClipRet = GetTextArea().GenerateClipRectRight(&rcClip,*pInfo->m_pDispPos);
+	// 🔥【自前改造】見出しの行は字を上へずらして描くので、行末の塗りも同じだけ上まで伸ばす。
+	//    伸ばさないと、文字を消したときに**ずらした位置の字が消え残る**。
+	if( rcClipRet && 0 < nMdLift ){
+		rcClip.top -= nMdLift;
+	}
 	if(rcClipRet){
 		if( !bTransText ){
 			cBackType.FillBack(pInfo->m_gr,rcClip);

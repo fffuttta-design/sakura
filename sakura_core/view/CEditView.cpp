@@ -1150,17 +1150,8 @@ int CEditView::CalcHeadingHeight( int nLevel ) const
 	if( nHeight < nCharH ){
 		nHeight = nCharH;		// 本文より小さくはしない
 	}
-	// 🔥 升目いっぱいまで許すと、見出しが**次の行の字にくっついて詰まって見える**
-	//    （2026-09-05 本人から指摘）。∴ 下に MD_HEADING_GAP_SCALE ぶんの余白を必ず残す。
-	//    升目の高さ自体がこの余白込みで決まっている（markdown.h）ので、
-	//    ふつうはここで切り詰められることはない＝行間を手で狭められたときの保険。
-	const int nGap = (int)( nCharH * MD_HEADING_GAP_SCALE );
-	int nMax = nLineH - nGap;
-	if( nMax < nCharH ){
-		nMax = nCharH;			// 余白のために本文より小さくはしない
-	}
-	if( nMax < nHeight ){
-		nHeight = nMax;			// 行からはみ出して上下が欠けないようにする
+	if( nLineH < nHeight ){
+		nHeight = nLineH;		// 行からはみ出して上下が欠けないようにする
 	}
 	return nHeight;
 }
@@ -1191,6 +1182,55 @@ int CEditView::GetHeadingLevelAtCaret() const
 		return 0;
 	}
 	return nLevel;
+}
+
+/*! 見出しの字を升目より上へずらす量（px）（【自前改造】）
+
+	🔥 **見出しの下に余白を作るための仕掛け。**
+	   サクラは全行が同じ高さの升目なので、見出しの行だけ高くはできない。
+	   ∴ 字を上へずらして、**下に空きを作る**。上へ出たぶんは1つ上の行の
+	   「字の下の空き」（升目の高さ − 本文の字の高さ）に収める。
+
+	   ずらす量 ＝「下にこれだけ空けたい（MD_HEADING_GAP_SCALE）」から逆算する。
+	   段が小さい見出しは元から下に空きがあるので、そのぶんずらす量は少なくなる（0 のこともある）。
+
+	⚠ 上の行の字に触れないよう、頭打ちを必ず入れること（触れると字が重なる）。
+*/
+int CEditView::CalcHeadingLift( int nLevel ) const
+{
+	const int nHeadH = CalcHeadingHeight( nLevel );
+	if( nHeadH <= 0 ){
+		return 0;
+	}
+	const int nCharH = GetTextMetrics().GetHankakuHeight();
+	const int nLineH = GetTextMetrics().GetHankakuDy();
+	if( nCharH <= 0 || nLineH <= 0 ){
+		return 0;
+	}
+	int nGap = (int)( nCharH * MD_HEADING_GAP_SCALE );
+	if( nGap < 1 ){
+		nGap = 1;
+	}
+	// 下に nGap 空けるには、いま足りないぶんだけ上へずらす
+	int nLift = nGap - ( nLineH - nHeadH );
+	if( nLift <= 0 ){
+		return 0;			// 元から下に空きがある（小さい見出し）
+	}
+	// 🔥 上の行の字に触れない範囲まで。2px は念のための隙間
+	const int nMax = ( nLineH - nCharH ) - 2;
+	if( nMax <= 0 ){
+		return 0;
+	}
+	return ( nMax < nLift ) ? nMax : nLift;
+}
+
+/*! カーソルのある行が見出しなら、その字をずらしている量（【自前改造】）
+
+	カーソルの縦棒も同じだけ上げないと、字とカーソルが縦にずれる。
+*/
+int CEditView::GetHeadingLiftAtCaret() const
+{
+	return CalcHeadingLift( GetHeadingLevelAtCaret() );
 }
 
 /*! カーソルのある行が見出しなら、その文字の高さを返す（【自前改造】）
@@ -1304,6 +1344,23 @@ void CEditView::SetFont()
 
 	// 見出し用のフォントを作り直す（升目の大きさが決まったあとで作る）
 	UpdateHeadingFonts();
+
+	// 🔥【自前改造】いちばん上の行が見出しのときのために、ルーラーとの間に隙間を空ける。
+	//    見出しは升目より上へずらして描く（下に余白を作るため）ので、
+	//    **1行目にはずらす先が無い**＝隙間が無いとルーラーに食い込む。
+	//    ここは .md のときだけ。ふつうの文書では今までどおり隙間ゼロ。
+	{
+		int nYohaku = DpiScaleY(GetDllShareData().m_Common.m_sWindow.m_nRulerBottomSpace);
+		if( !m_bMiniMap && IsMarkdownDocument() ){
+			nYohaku += CalcHeadingLift( 1 );	// いちばん大きい見出しのぶん
+		}
+		GetTextArea().SetTopYohaku( nYohaku );
+		GetTextArea().SetAreaTop( nYohaku );
+		if( m_pTypeData->m_ColorInfoArr[COLORIDX_RULER].m_bDisp && !m_bMiniMap ){
+			GetTextArea().SetAreaTop( GetTextArea().GetAreaTop()
+				+ DpiScaleY(GetDllShareData().m_Common.m_sWindow.m_nRulerHeight) );
+		}
+	}
 
 	// エリア情報を更新
 	GetTextArea().UpdateAreaMetrics();

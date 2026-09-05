@@ -121,6 +121,15 @@ public:
 	int GetHeadingHeightAtCaret() const;
 	//! 【自前改造】カーソルのある行の見出しの段（1〜3）。見出しでなければ 0
 	int GetHeadingLevelAtCaret() const;
+	//! 【自前改造】見出しの字を升目より上へずらす量（px）。見出しでなければ 0
+	//   下に余白を作るための仕掛け（詳しくは CalcHeadingLift の説明）
+	int CalcHeadingLift( int nLevel ) const;
+	//! 【自前改造】カーソルのある行が見出しなら、その字をずらしている量
+	int GetHeadingLiftAtCaret() const;
+	//! 【自前改造】いま描いている行の「上へのずらし量」（描画中だけ意味がある）
+	//   🔥 文字を描く側（CTextDrawer::DispText）が見る。行を描き始めるときに入れ、描き終えたら 0 に戻す。
+	int GetDrawingHeadingLift() const { return m_nMdHeadingLift; }
+	void SetDrawingHeadingLift( int n ){ m_nMdHeadingLift = n; }
 	//! 【自前改造】日本語入力の変換中（未確定の文字が出ている最中）か
 	//   🔥 変換中は**自前のカーソル（縦棒）を出さない**。未確定文字を描いているのは IME 自身で、
 	//      その文字はカーソルと同じ位置から右へ伸びる。∴ 消さないとカーソルが1文字目に
@@ -138,6 +147,8 @@ private:
 	int m_nImeFontLevel = -1;
 	//! 【自前改造】日本語入力の変換中か（WM_IME_STARTCOMPOSITION 〜 WM_IME_ENDCOMPOSITION）
 	bool m_bImeComposing = false;
+	//! 【自前改造】いま描いている行の「上へのずらし量」（見出しの下に余白を作るため）
+	int m_nMdHeadingLift = 0;
 public:
 
 	const CEditDoc* GetDocument() const

@@ -542,6 +542,20 @@ void CEditView::ScrollDraw(CLayoutInt nScrollRowNum, CLayoutInt nScrollColNum, c
 			&rcScroll,	/* スクロール長方形の構造体のアドレス */
 			nullptr, nullptr , nullptr, SW_ERASE | SW_INVALIDATE
 		);
+		// 🔥【自前改造】Markdown の見出しは升目より上へはみ出して描く（下に余白を作るため）。
+		//    下へスクロールすると、新しく出てきた帯の**先頭の行**が見出しだったとき、
+		//    そのはみ出し（帯より上）は描き直しの対象に入らず**頭が欠ける**。
+		//    ∴ 出てきた帯の1行ぶん上も描き直させる。
+		if( !m_bMiniMap && nScrollRowNum < 0 && IsMarkdownDocument() ){
+			const int nDy = GetTextMetrics().GetHankakuDy();
+			CMyRect rcMdHead;
+			rcMdHead.left   = rcScroll.left;
+			rcMdHead.right  = rcScroll.right;
+			rcMdHead.bottom = rcScroll.bottom + (Int)nScrollRowNum * nDy;	// 出てきた帯の上端
+			rcMdHead.top    = rcMdHead.bottom - nDy;
+			InvalidateRect( &rcMdHead, FALSE );
+		}
+
 		// From Here 2007.09.09 Moca 互換BMPによる画面バッファ
 		if( m_hbmpCompatBMP ){
 			// 互換BMPもスクロール処理のためにBitBltで移動させる

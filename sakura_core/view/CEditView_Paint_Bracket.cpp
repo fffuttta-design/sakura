@@ -11,6 +11,7 @@
 #include "window/CEditWnd.h"
 #include "doc/CEditDoc.h"
 #include "types/CTypeSupport.h"
+#include "util/markdown.h"	// 【自前改造】見出しの行かどうか
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 //                           括弧                              //
@@ -137,6 +138,15 @@ void CEditView::DrawBracketPair( bool bDraw )
 			const CLayout* pcLayout;
 			CLogicInt		nLineLen;
 			const wchar_t*	pLine = m_pcEditDoc->m_cLayoutMgr.GetLineStr( ptColLine.GetY2(), &nLineLen, &pcLayout );
+			// 【自前改造】Markdown の見出しの行では、対括弧の強調表示をしない。
+			//   見出しの行は「大きい字」を「升目より上へずらして」描いている。ここは1文字だけを
+			//   ふつうの字・ふつうの位置で描き直す作りなので、そのままだと括弧だけ
+			//   小さく・下にずれて出てしまう（消すときも塗り残しが出る）。
+			if( pLine && pcLayout && 0 == pcLayout->GetLogicOffset()
+			 && !m_bMiniMap && IsMarkdownDocument()
+			 && MdParseHeading( pLine, nLineLen, nullptr, nullptr ) ){
+				continue;
+			}
 			if( pLine )
 			{
 				EColorIndexType		nColorIndex;
