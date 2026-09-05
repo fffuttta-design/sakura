@@ -1352,7 +1352,9 @@ void CEditView::SetFont()
 	{
 		int nYohaku = DpiScaleY(GetDllShareData().m_Common.m_sWindow.m_nRulerBottomSpace);
 		if( !m_bMiniMap && IsMarkdownDocument() ){
-			nYohaku += CalcHeadingLift( 1 );	// いちばん大きい見出しのぶん
+			// 🔥 ずらす量ぴったりだと、字の形によっては頭が1〜2ドット切れる
+			//    （2026-09-05 本人から「文字が見切れてる」と指摘）。∴ 少し多めに空ける。
+			nYohaku += CalcHeadingLift( 1 ) + DpiScaleY( 3 );
 		}
 		GetTextArea().SetTopYohaku( nYohaku );
 		GetTextArea().SetAreaTop( nYohaku );
@@ -1444,6 +1446,29 @@ bool CEditView::IsCurrentPositionURL(
 )
 {
 	MY_RUNNINGTIMER( cRunningTimer, L"CEditView::IsCurrentPositionURL" );
+
+	// 【自前改造】Markdown のリンク `[表示テキスト](URL)` の文字の上なら、その URL を返す。
+	//   ここを通しておくと、本家の URL と同じ道で
+	//   「手のカーソル・ダブルクリックで開く・クリックで選ぶ」がそのまま働く。
+	if( IsMarkdownDocument() ){
+		CLogicPoint ptMdXY;
+		m_pcEditDoc->m_cLayoutMgr.LayoutToLogic( ptCaretPos, &ptMdXY );
+		CLogicInt nMdLineLen;
+		const wchar_t* pMdLine = CDocLine::GetDocLineStrWithEOL_Safe(
+			m_pcEditDoc->m_cDocLineMgr.GetLine( ptMdXY.GetY2() ), &nMdLineLen );
+		MdLinkPos mdLink;
+		if( nullptr != pMdLine
+		 && MdFindLinkAtText( pMdLine, (Int)nMdLineLen, (Int)ptMdXY.GetX2(), &mdLink ) ){
+			if( pstrURL ){
+				pstrURL->assign( &pMdLine[mdLink.nUrlBgn], mdLink.nUrlEnd - mdLink.nUrlBgn );
+			}
+			if( pUrlRange ){
+				pUrlRange->SetLine( ptMdXY.GetY2() );
+				pUrlRange->SetXs( CLogicInt(mdLink.nTextBgn), CLogicInt(mdLink.nTextEnd) );
+			}
+			return true;
+		}
+	}
 
 	// URLを強調表示するかどうかチェックする	// 2009.05.27 ryoji
 	bool bDispUrl = CTypeSupport(this,COLORIDX_URL).IsDisp();

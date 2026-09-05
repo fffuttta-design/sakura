@@ -29,6 +29,8 @@
 #include "plugin/CSmartIndentIfObj.h"
 #include "debug/CRunningTimer.h"
 #include "apiwrap/CommonControl.h"
+#include "dlg/CDlgInput1.h"	// 【自前改造】リンクのURLを聞く1行入力
+#include "parse/CWordParse.h"	// 【自前改造】IsURL（クリップボードがURLかの判定）
 
 /* wchar_t1個分の文字を入力 */
 void CViewCommander::Command_WCHAR( wchar_t wcChar, bool bConvertEOL )
@@ -371,7 +373,12 @@ void CViewCommander::Command_UNDO( void )
 	/* 現在のUndo対象の操作ブロックを返す */
 	if( nullptr != ( pcOpeBlk = GetDocument()->m_cDocEditor.m_cOpeBuf.DoUndo( &bIsModified ) ) ){
 		nOpeBlkNum = pcOpeBlk->GetNum();
-		bool bDraw = (nOpeBlkNum < 5) && m_pCommanderView->GetDrawSwitch();
+		// 🔥【自前改造】.md では常に「論理位置のまま」戻す（bFastMode）。
+		//    Markdown の記号は幅ゼロで描いているので、**画面の桁からは位置を一つに決められない**。
+		//    ふつうの戻し方は画面の桁を通るため1文字ぶんずれて、
+		//    リンクを入れた直後に元に戻すと `[` だけ残った（2026-09-05 実際に起きた）。
+		const bool bMdFast = GetDocument()->IsMarkdownDocument();
+		bool bDraw = (nOpeBlkNum < 5) && !bMdFast && m_pCommanderView->GetDrawSwitch();
 		bool bDrawAll = false;
 		const bool bDrawSwitchOld = m_pCommanderView->SetDrawSwitch(bDraw);	// hor
 
@@ -382,7 +389,7 @@ void CViewCommander::Command_UNDO( void )
 			hwndProgress = m_pCommanderView->StartProgress();
 		}
 
-		const bool bFastMode = (100 < nOpeBlkNum);
+		const bool bFastMode = (100 < nOpeBlkNum) || bMdFast;
 		for( i = nOpeBlkNum - 1; i >= 0; i-- ){
 			pcOpe = pcOpeBlk->GetOpe( i );
 			if( bFastMode ){
@@ -630,7 +637,9 @@ void CViewCommander::Command_REDO( void )
 	/* 現在のRedo対象の操作ブロックを返す */
 	if( nullptr != ( pcOpeBlk = GetDocument()->m_cDocEditor.m_cOpeBuf.DoRedo( &bIsModified ) ) ){
 		nOpeBlkNum = pcOpeBlk->GetNum();
-		bool bDraw = (nOpeBlkNum < 5) && m_pCommanderView->GetDrawSwitch();
+		// 🔥【自前改造】.md では常に論理位置のままやり直す（理由は Command_UNDO 側のコメント）
+		const bool bMdFastRedo = GetDocument()->IsMarkdownDocument();
+		bool bDraw = (nOpeBlkNum < 5) && !bMdFastRedo && m_pCommanderView->GetDrawSwitch();
 		bool bDrawAll = false;
 		const bool bDrawSwitchOld = m_pCommanderView->SetDrawSwitch(bDraw);	// 2007.07.22 ryoji
 
@@ -641,7 +650,7 @@ void CViewCommander::Command_REDO( void )
 			hwndProgress = m_pCommanderView->StartProgress();
 		}
 
-		const bool bFastMode = (100 < nOpeBlkNum);
+		const bool bFastMode = (100 < nOpeBlkNum) || bMdFastRedo;
 		for( i = 0; i < nOpeBlkNum; ++i ){
 			pcOpe = pcOpeBlk->GetOpe( i );
 			if( bFastMode ){
@@ -880,6 +889,52 @@ void CViewCommander::Command_DELETE( void )
 	return;
 }
 
+namespace {
+
+//! 前後の空白・改行を落とす
+void MdTrimSpace( std::wstring& str )
+{
+	size_t nBgn = 0;
+	while( nBgn < str.length() && ( MdIsSpace( str[nBgn] ) || L'\r' == str[nBgn] || L'\n' == str[nBgn] ) ){
+		++nBgn;
+	}
+	size_t nEnd = str.length();
+	while( nEnd > nBgn && ( MdIsSpace( str[nEnd - 1] ) || L'\r' == str[nEnd - 1] || L'\n' == str[nEnd - 1] ) ){
+		--nEnd;
+	}
+	str = str.substr( nBgn, nEnd - nBgn );
+}
+
+//! URL の中の「リンクの形を壊す文字」を %XX に置き換える
+/*!
+	`[ ] ( )` と空白がそのまま入っていると `[表示](URL)` の形が崩れて、
+	記号が画面に出てしまう。%XX はどのブラウザでも元の文字として扱われる。
+*/
+std::wstring MdEscapeUrl( const std::wstring& strUrl )
+{
+	std::wstring strOut;
+	strOut.reserve( strUrl.length() + 8 );
+	for( wchar_t c : strUrl ){
+		switch( c ){
+		case L' ':  strOut += L"%20"; break;
+		case L'(':  strOut += L"%28"; break;
+		case L')':  strOut += L"%29"; break;
+		case L'[':  strOut += L"%5B"; break;
+		case L']':  strOut += L"%5D"; break;
+		default:
+			if( MdIsSpace( c ) ){
+				strOut += L"%20";
+			}else{
+				strOut += c;
+			}
+			break;
+		}
+	}
+	return strOut;
+}
+
+} // namespace
+
 //カーソル前を削除
 /*! 【自前改造】Markdown の見出しの頭で BackSpace を押したら、見出しをやめる
 
@@ -1076,4 +1131,292 @@ void CViewCommander::DelCharForOverwrite( const wchar_t* pszInput, int nLen )
 			GetCaret().MoveCursor(posBefore, false);
 		}
 	}
+}
+
+//! 【自前改造】Markdown のリンクを仕込む／直す（Ctrl+K）
+/*!
+	表計算のリンクと同じ操作感にしてある。
+
+	- 文字を選んで Ctrl+K → URL を聞かれ、その文字がリンク（青＋下線）になる
+	- リンクの上で Ctrl+K → いまの URL が入った状態で開く（直せる）
+	- URL を空にして OK → リンクを外す（文字はそのまま残る）
+	- 何も選ばずに Ctrl+K → 入れた URL がそのまま見える文字になる
+	- クリップボードが URL なら最初から入れておく（貼り付ける手間を省く）
+
+	ファイルに書かれるのは素の Markdown（`[表示テキスト](URL)`）。
+	画面では記号と URL を隠しているだけなので、他のアプリで開けばふつうのリンクに見える。
+
+	🔥 記号は幅ゼロで描いている。∴ 書き換えたあと**レイアウトを作り直さないと画面と桁がずれる**。
+	   見出し記号を消すとき（DeleteBack_MdHeadingMarker）と同じ道を通ること。
+*/
+void CViewCommander::Command_MD_LINK( void )
+{
+	if( !GetDocument()->IsMarkdownDocument() ){
+		return;			// .md 以外では何もしない
+	}
+	CEditView* pView = m_pCommanderView;
+	if( pView->GetSelectionInfo().IsMouseSelecting() ){
+		return;
+	}
+
+	const CLogicPoint ptCaretLogic = GetCaret().GetCaretLogicPos();
+	CLogicInt   nLineY = ptCaretLogic.GetY2();
+	CLogicRange sRange;
+	sRange.SetFrom( ptCaretLogic );
+	sRange.SetTo( ptCaretLogic );
+
+	std::wstring strText;	// リンクにする（画面に見える）文字
+	std::wstring strUrl;	// いまの URL。新しく作るときは空
+
+	// 選んでいる文字があれば、それをリンクにする
+	CViewSelect& cSelect = pView->GetSelectionInfo();
+	const bool bSelected = cSelect.IsTextSelected();
+	if( bSelected ){
+		if( cSelect.IsBoxSelecting() ){
+			return;		// 矩形選択はリンクにできない
+		}
+		CLogicRange sSel;
+		GetDocument()->m_cLayoutMgr.LayoutToLogic( cSelect.m_sSelect, &sSel );
+		if( sSel.GetFrom().GetY2() != sSel.GetTo().GetY2() ){
+			return;		// 複数行にまたがるものはリンクにできない
+		}
+		nLineY = sSel.GetFrom().GetY2();
+		sRange = sSel;
+	}
+
+	// その行を読む
+	const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( nLineY );
+	CLogicInt nLineLen = CLogicInt(0);
+	const wchar_t* pLine = ( nullptr != pcDocLine ) ? pcDocLine->GetDocLineStrWithEOL( &nLineLen ) : nullptr;
+	if( nullptr == pLine ){
+		// ファイルの末尾（まだ行が無い場所）。空の行として扱えばそのまま作れる
+		pLine = L"";
+		nLineLen = CLogicInt(0);
+	}
+	if( bSelected ){
+		int nFrom = (Int)sRange.GetFrom().GetX2();
+		int nTo   = (Int)sRange.GetTo().GetX2();
+		if( nTo > (Int)nLineLen ){
+			nTo = (Int)nLineLen;
+		}
+		while( nTo > nFrom && ( L'\r' == pLine[nTo - 1] || L'\n' == pLine[nTo - 1] ) ){
+			--nTo;		// 改行はリンクに含めない
+		}
+		if( nFrom >= nTo ){
+			return;
+		}
+		strText.assign( &pLine[nFrom], nTo - nFrom );
+		sRange.SetTo( CLogicPoint( CLogicInt(nTo), nLineY ) );
+	}else{
+		MdLinkPos link;
+		if( MdFindLinkCovering( pLine, (Int)nLineLen, (Int)ptCaretLogic.GetX2(), &link ) ){
+			strText.assign( &pLine[link.nTextBgn], link.nTextEnd - link.nTextBgn );
+			strUrl.assign(  &pLine[link.nUrlBgn],  link.nUrlEnd  - link.nUrlBgn  );
+			sRange.SetFrom( CLogicPoint( CLogicInt(link.nOpen),        nLineY ) );
+			sRange.SetTo(   CLogicPoint( CLogicInt(link.nUrlEnd + 1),  nLineY ) );
+		}
+	}
+
+	// 新しく作るときは、クリップボードが URL ならそれを初期値にする
+	if( strUrl.empty() ){
+		std::wstring strClip;
+		if( pView->MyGetClipboardData( strClip, nullptr, nullptr ) ){
+			MdTrimSpace( strClip );
+			int nMatchLen = 0;
+			if( !strClip.empty() && strClip.length() < 1000
+			 && IsURL( strClip.c_str(), strClip.length(), &nMatchLen )
+			 && (size_t)nMatchLen == strClip.length() ){
+				strUrl = strClip;
+			}
+		}
+	}
+
+	// URL を聞く
+	std::wstring strInput( 1023, L'\0' );
+	if( !strUrl.empty() ){
+		::wcscpy_s( strInput.data(), strInput.size() + 1, strUrl.c_str() );
+	}
+	if( !CDlgInput1::getInstance()->DoModal( pView->GetHwnd(),
+			L"リンク",
+			L"リンク先のURL（空にすればリンクを外します）",
+			strInput ) ){
+		return;			// キャンセル
+	}
+	strInput.resize( ::wcslen( strInput.c_str() ) );
+	MdTrimSpace( strInput );
+
+	// 入れる文字を組み立てる
+	std::wstring strNew;
+	if( strInput.empty() ){
+		strNew = strText;			// URL が空＝リンクを外す（文字は残す）
+	}else{
+		if( strText.empty() ){
+			strText = strInput;		// 見せる文字が無ければ URL をそのまま見せる
+		}
+		strNew = L"[";
+		strNew += strText;
+		strNew += L"](";
+		strNew += MdEscapeUrl( strInput );
+		strNew += L")";
+	}
+	if( strNew.empty() && sRange.GetFrom().GetX2() == sRange.GetTo().GetX2() ){
+		return;			// 何も変わらない
+	}
+
+	if( bSelected ){
+		cSelect.DisableSelectArea( false );
+	}
+	// カーソルはリンクの直後へ
+	MdReplaceLogic( sRange, strNew, (int)strNew.length() );
+}
+
+//! 【自前改造】論理位置のまま書き換えて、レイアウトを作り直す
+/*!
+	Markdown で隠している記号（`#` `[` `](URL)` `**`）が増減する書き換えは、
+	画面の桁（レイアウト）では位置を一つに決められない。
+	∴ **論理位置のまま**書き換え（bFastMode）、そのあとレイアウトを作り直す。
+
+	@param sRange       置き換える範囲（論理位置）
+	@param strNew       入れる文字
+	@param nCaretOffset 書き換えたあとカーソルを置く位置（strNew の先頭からの文字数）
+*/
+void CViewCommander::MdReplaceLogic( const CLogicRange& sRange, const std::wstring& strNew, int nCaretOffset )
+{
+	CEditView* pView = m_pCommanderView;
+	CLayoutMgr& cLayoutMgr = GetDocument()->m_cLayoutMgr;
+	const CLayoutInt nViewTopLine = pView->GetTextArea().GetViewTopLine();
+	const CLayoutInt nViewLeftCol = pView->GetTextArea().GetViewLeftCol();
+	const CLogicInt  nInsPos = sRange.GetFrom().GetX2();
+	const CLogicInt  nLineY  = sRange.GetFrom().GetY2();
+
+	pView->ReplaceData_CEditView2(
+		sRange,
+		strNew.c_str(),
+		CLogicInt( (int)strNew.length() ),
+		false,		// ここでは描かない（レイアウトを作り直したあとで描く）
+		pView->m_bDoing_UndoRedo ? nullptr : GetOpeBlk(),
+		true		// bFastMode＝レイアウトを通さず論理位置で書き換える
+	);
+
+	// レイアウトを作り直す（隠す文字が増減して行の見え方が変わるため）
+	cLayoutMgr._DoLayout( false );
+	GetEditWindow()->ClearViewCaretPosInfo();
+	if( GetDocument()->m_nTextWrapMethodCur == WRAP_NO_TEXT_WRAP ){
+		cLayoutMgr.CalculateTextWidth( FALSE );
+	}else{
+		cLayoutMgr.ClearLayoutLineWidth();
+	}
+	pView->GetTextArea().SetViewTopLine( nViewTopLine );
+	pView->GetTextArea().SetViewLeftCol( nViewLeftCol );
+
+	CLayoutPoint ptNew;
+	cLayoutMgr.LogicToLayout( CLogicPoint( nInsPos + CLogicInt( nCaretOffset ), nLineY ), &ptNew );
+	GetCaret().MoveCursor( ptNew, true );
+	GetCaret().m_nCaretPosX_Prev = GetCaret().GetCaretLayoutPos().GetX2();
+
+	pView->AdjustScrollBars();
+	pView->Call_OnPaint( PAINT_LINENUMBER | PAINT_BODY | PAINT_RULER, false );
+	GetCaret().ShowCaretPosInfo();
+	GetEditWindow()->RedrawAllViews( pView );
+}
+
+//! 【自前改造】Markdown の太字（Ctrl+B）
+/*!
+	ふたMEMO と同じ操作感。ファイルに書かれるのは素の Markdown（`**文字**`）で、
+	画面では前後の `**` を消して**字を太く**見せる。
+
+	- 文字を選んで Ctrl+B → その文字が太字になる
+	- 太字の文字を選んで（またはその上で）Ctrl+B → 太字を外す
+	- 何も選ばずに Ctrl+B → `****` を置いて真ん中にカーソルを置く
+	  （そのまま打てば太字になる。記号は1文字目を打った瞬間に消える）
+*/
+void CViewCommander::Command_MD_BOLD( void )
+{
+	if( !GetDocument()->IsMarkdownDocument() ){
+		return;			// .md 以外では何もしない
+	}
+	CEditView* pView = m_pCommanderView;
+	if( pView->GetSelectionInfo().IsMouseSelecting() ){
+		return;
+	}
+
+	const CLogicPoint ptCaretLogic = GetCaret().GetCaretLogicPos();
+	CLogicInt   nLineY = ptCaretLogic.GetY2();
+	CLogicRange sRange;
+	sRange.SetFrom( ptCaretLogic );
+	sRange.SetTo( ptCaretLogic );
+
+	// 選んでいる文字があれば、それを太字にする
+	CViewSelect& cSelect = pView->GetSelectionInfo();
+	const bool bSelected = cSelect.IsTextSelected();
+	if( bSelected ){
+		if( cSelect.IsBoxSelecting() ){
+			return;		// 矩形選択は太字にできない
+		}
+		CLogicRange sSel;
+		GetDocument()->m_cLayoutMgr.LayoutToLogic( cSelect.m_sSelect, &sSel );
+		if( sSel.GetFrom().GetY2() != sSel.GetTo().GetY2() ){
+			return;		// 複数行にまたがるものは太字にできない
+		}
+		nLineY = sSel.GetFrom().GetY2();
+		sRange = sSel;
+	}
+
+	// その行を読む
+	const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( nLineY );
+	CLogicInt nLineLen = CLogicInt(0);
+	const wchar_t* pLine = ( nullptr != pcDocLine ) ? pcDocLine->GetDocLineStrWithEOL( &nLineLen ) : nullptr;
+	if( nullptr == pLine ){
+		pLine = L"";
+		nLineLen = CLogicInt(0);
+	}
+
+	int nFrom = (Int)sRange.GetFrom().GetX2();
+	int nTo   = (Int)sRange.GetTo().GetX2();
+	if( nTo > (Int)nLineLen ){
+		nTo = (Int)nLineLen;
+	}
+	if( bSelected ){
+		while( nTo > nFrom && ( L'\r' == pLine[nTo - 1] || L'\n' == pLine[nTo - 1] ) ){
+			--nTo;		// 改行は太字に含めない
+		}
+		if( nFrom >= nTo ){
+			return;
+		}
+	}
+
+	// いま太字の中にいるなら外す
+	MdBoldPos bold;
+	bool bUnbold = false;
+	if( MdFindBoldCovering( pLine, (Int)nLineLen, nFrom, &bold ) ){
+		bUnbold = ( !bSelected ) || ( bold.nTextBgn <= nFrom && nTo <= bold.nTextEnd );
+	}
+
+	std::wstring strNew;
+	int nCaretOffset = 0;
+	if( bUnbold ){
+		// 記号だけ取り除く（中の文字はそのまま残す）
+		strNew.assign( &pLine[bold.nTextBgn], bold.nTextEnd - bold.nTextBgn );
+		sRange.SetFrom( CLogicPoint( CLogicInt(bold.nOpenBgn),  nLineY ) );
+		sRange.SetTo(   CLogicPoint( CLogicInt(bold.nCloseEnd), nLineY ) );
+		nCaretOffset = (int)strNew.length();
+	}else if( bSelected ){
+		strNew = L"**";
+		strNew.append( &pLine[nFrom], nTo - nFrom );
+		strNew += L"**";
+		sRange.SetFrom( CLogicPoint( CLogicInt(nFrom), nLineY ) );
+		sRange.SetTo(   CLogicPoint( CLogicInt(nTo),   nLineY ) );
+		nCaretOffset = (int)strNew.length();
+	}else{
+		// 何も選んでいないときは、空の太字を置いて真ん中にカーソルを入れる
+		strNew = L"****";
+		sRange.SetFrom( CLogicPoint( CLogicInt(nFrom), nLineY ) );
+		sRange.SetTo(   CLogicPoint( CLogicInt(nFrom), nLineY ) );
+		nCaretOffset = 2;
+	}
+
+	if( bSelected ){
+		cSelect.DisableSelectArea( false );
+	}
+	MdReplaceLogic( sRange, strNew, nCaretOffset );
 }

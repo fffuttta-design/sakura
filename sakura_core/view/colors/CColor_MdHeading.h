@@ -61,4 +61,43 @@ private:
 	int		m_nEnd = 0;
 };
 
+//! 【自前改造】Markdown のリンク `[表示テキスト](URL)` の表示テキストを色分けする
+/*!
+	記号（`[` と `](URL)`）は幅ゼロで描かないので、画面には表示テキストだけが
+	青＋下線で出る（＝表計算のリンクと同じ見え方）。
+	隠す範囲の判定は util/markdown.h の MdHiddenEndAt が正本。
+*/
+class CColor_MdLink final : public CColorStrategy{
+public:
+	EColorIndexType GetStrategyColor() const override{ return COLORIDX_MDLINK; }
+	void InitStrategyStatus() override{ m_nEnd = 0; }
+	bool BeginColor(const CStringRef& cStr, int nPos) override;
+	bool EndColor(const CStringRef& cStr, int nPos) override;
+	bool Disp() const override{
+		return MdIsCurrentDocMarkdown() && m_pTypeData->m_ColorInfoArr[COLORIDX_MDLINK].m_bDisp;
+	}
+
+private:
+	int		m_nEnd = 0;
+};
+
+//! 【自前改造】Markdown の太字 `**文字**` の中の文字を太字で描く
+/*!
+	前後の `**` は幅ゼロで描かないので、画面には中の文字だけが太字で出る
+	（＝ふたMEMO と同じ見え方）。隠す範囲の判定は MdHiddenEndAt が正本。
+*/
+class CColor_MdBold final : public CColorStrategy{
+public:
+	EColorIndexType GetStrategyColor() const override{ return COLORIDX_MDBOLD; }
+	void InitStrategyStatus() override{ m_nEnd = 0; }
+	bool BeginColor(const CStringRef& cStr, int nPos) override;
+	bool EndColor(const CStringRef& cStr, int nPos) override;
+	bool Disp() const override{
+		return MdIsCurrentDocMarkdown() && m_pTypeData->m_ColorInfoArr[COLORIDX_MDBOLD].m_bDisp;
+	}
+
+private:
+	int		m_nEnd = 0;
+};
+
 #endif /* SAKURA_CCOLOR_MDHEADING_H_ */

@@ -2274,6 +2274,8 @@ BEGIN
     F_CHECK_UPDATE          "今すぐ最新版を確認..."
     F_FILE_RENAME           "ファイル名の変更..."
     F_FILE_TOGGLE_MD        "Markdown(.md)とテキスト(.txt)を切り替え"
+    F_MD_LINK               "リンクを仕込む/直す..."
+    F_MD_BOLD               "太字にする/戻す"
 END
 
 STRINGTABLE
@@ -3986,6 +3988,8 @@ BEGIN
     STR_COLOR_MDHEAD2       "Markdown 見出し2 (##)"
     STR_COLOR_MDHEAD3       "Markdown 見出し3 (###)"
     STR_COLOR_MDMARK        "Markdown 見出しの # 記号"
+    STR_COLOR_MDLINK        "Markdown のリンク"
+    STR_COLOR_MDBOLD        "Markdown の太字"
     STR_ERR_CSPLITTER01     "SplitterWndクラスの登録に失敗しました。"
 END
 

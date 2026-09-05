@@ -198,6 +198,8 @@ BOOL CViewCommander::HandleCommand(
 	case F_CHECK_UPDATE:		Command_CHECK_UPDATE(); break;			/* 今すぐ最新版を確認 */
 	case F_FILE_RENAME:			Command_FILE_RENAME(); break;			/* ファイル名の変更 */
 	case F_FILE_TOGGLE_MD:		Command_FILE_TOGGLE_MD(); break;		/* Markdown/テキストの切り替え */
+	case F_MD_LINK:				Command_MD_LINK(); break;				/* Markdownのリンクを仕込む／直す */
+	case F_MD_BOLD:				Command_MD_BOLD(); break;				/* Markdownの太字 */
 	case F_FILESAVECLOSE:
 		//	Feb. 28, 2004 genta 保存＆閉じる
 		//	保存が不要なら単に閉じる

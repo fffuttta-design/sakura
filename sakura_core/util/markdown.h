@@ -130,6 +130,132 @@ inline bool MdIsHorizontalRule( const wchar_t* pLine, int nLen )
 	return ( 0 < nSpace );
 }
 
+//! リンク `[表示テキスト](URL)` の位置
+/*!
+	🔥 **画面に出すのは表示テキストだけ。** `[` と `](URL)` は
+	   「幅ゼロ・描かない」で消す（見出しの `#` と同じやり方）。
+	   文字そのものは残っているので、保存すればただの Markdown に戻る。
+*/
+struct MdLinkPos {
+	int nOpen;		//!< `[` の位置
+	int nTextBgn;	//!< 表示テキストの始まり（`[` の次）
+	int nTextEnd;	//!< 表示テキストの終わり（`]` の位置）
+	int nUrlBgn;	//!< URL の始まり（`(` の次）
+	int nUrlEnd;	//!< URL の終わり（`)` の位置）
+};
+
+//! リンク1つ（`[…](…)` ぜんぶ）の長さの上限
+/*!
+	🔥 上限を切る理由は**速さ**。隠す文字かどうかは1文字ごとに調べるので、
+	   「手前にある `[` を無制限に探す」と長い行で二乗の手間になり、打つたびに固まる。
+	   ∴ ここまで遡って見つからなければリンクではない、と打ち切る。
+	   **描画・レイアウト・色分け・クリックが全部この上限を共有する**ので、
+	   どれか1つだけ判定が変わる（＝文字とカーソルがずれる）ことは起きない。
+*/
+constexpr int MD_LINK_MAX_LEN = 512;
+
+//! 位置 nAt から始まるリンクを読む
+/*!
+	規則（ふたMEMO と同じ）：
+	- `[表示テキスト](URL)` が途切れず並んでいること
+	- 表示テキストと URL はどちらも1文字以上（空はリンクにしない）
+	- 表示テキストに `[` `]` 改行を含めない／URL に空白・改行・`(` を含めない
+*/
+inline bool MdParseLinkAt( const wchar_t* pLine, int nLen, int nAt, MdLinkPos* pOut )
+{
+	if( nullptr == pLine || nAt < 0 || nAt >= nLen || L'[' != pLine[nAt] ){
+		return false;
+	}
+	const int nStop = ( nLen < nAt + MD_LINK_MAX_LEN ) ? nLen : ( nAt + MD_LINK_MAX_LEN );
+	int i = nAt + 1;
+	while( i < nStop && L']' != pLine[i] ){
+		if( L'\r' == pLine[i] || L'\n' == pLine[i] || L'[' == pLine[i] ){
+			return false;
+		}
+		++i;
+	}
+	if( i >= nStop || i == nAt + 1 ){
+		return false;			// `]` が無い／表示テキストが空
+	}
+	const int nTextEnd = i;
+	if( nTextEnd + 1 >= nLen || L'(' != pLine[nTextEnd + 1] ){
+		return false;			// `]` のすぐ後ろが `(` でない
+	}
+	int j = nTextEnd + 2;
+	while( j < nStop && L')' != pLine[j] ){
+		if( L'\r' == pLine[j] || L'\n' == pLine[j] || L'(' == pLine[j]
+		 || L'[' == pLine[j] || L']' == pLine[j] || MdIsSpace( pLine[j] ) ){
+			return false;
+		}
+		++j;
+	}
+	if( j >= nStop || j == nTextEnd + 2 ){
+		return false;			// `)` が無い／URL が空
+	}
+	if( pOut ){
+		pOut->nOpen    = nAt;
+		pOut->nTextBgn = nAt + 1;
+		pOut->nTextEnd = nTextEnd;
+		pOut->nUrlBgn  = nTextEnd + 2;
+		pOut->nUrlEnd  = j;
+	}
+	return true;
+}
+
+//! nFrom 以降で最初のリンクを探す
+inline bool MdFindNextLink( const wchar_t* pLine, int nLen, int nFrom, MdLinkPos* pOut )
+{
+	if( nullptr == pLine || nLen <= 0 ){
+		return false;
+	}
+	for( int p = ( 0 < nFrom ? nFrom : 0 ); p < nLen; ++p ){
+		if( L'[' == pLine[p] && MdParseLinkAt( pLine, nLen, p, pOut ) ){
+			return true;
+		}
+	}
+	return false;
+}
+
+//! 位置 nAt が「リンクの表示テキストの中」なら、そのリンクを返す
+inline bool MdFindLinkAtText( const wchar_t* pLine, int nLen, int nAt, MdLinkPos* pOut )
+{
+	MdLinkPos link;
+	int p = 0;
+	while( MdFindNextLink( pLine, nLen, p, &link ) ){
+		if( link.nTextBgn <= nAt && nAt < link.nTextEnd ){
+			if( pOut ){ *pOut = link; }
+			return true;
+		}
+		if( nAt < link.nOpen ){
+			break;
+		}
+		p = link.nUrlEnd + 1;
+	}
+	return false;
+}
+
+//! 位置 nAt に関わっているリンク（記号の上・すぐ後ろも含む）を返す
+/*!
+	Ctrl+K でリンクを編集するときに使う。カーソルが表示テキストの上にあるとき、
+	リンクの直後（`)` の次）にあるときも「そのリンク」とみなす。
+*/
+inline bool MdFindLinkCovering( const wchar_t* pLine, int nLen, int nAt, MdLinkPos* pOut )
+{
+	MdLinkPos link;
+	int p = 0;
+	while( MdFindNextLink( pLine, nLen, p, &link ) ){
+		if( link.nOpen <= nAt && nAt <= link.nUrlEnd + 1 ){
+			if( pOut ){ *pOut = link; }
+			return true;
+		}
+		if( nAt < link.nOpen ){
+			break;
+		}
+		p = link.nUrlEnd + 1;
+	}
+	return false;
+}
+
 //! 行頭が見出しなら、段（1～3）と本文の始まる位置を返す
 /*!
 	`#` は 1～6 個。**そのうしろに空白が1つ以上必要**（ふたMEMO と同じ規則）。
@@ -180,6 +306,161 @@ inline int MdHeadingMarkerLen( const wchar_t* pLine, int nLen )
 {
 	int nTextStart = 0;
 	return MdParseHeading( pLine, nLen, nullptr, &nTextStart ) ? nTextStart : 0;
+}
+
+//! 太字 `**文字**` の位置
+/*!
+	🔥 画面に出すのは中の文字だけ。前後の `**` は「幅ゼロ・描かない」で消す。
+	   ふたMEMO と同じ見え方（記号は消えて、字が太くなる）。
+*/
+struct MdBoldPos {
+	int nOpenBgn;	//!< 前の `**` の開始
+	int nTextBgn;	//!< 中の文字の始まり
+	int nTextEnd;	//!< 中の文字の終わり（後ろの `**` の開始）
+	int nCloseEnd;	//!< 後ろの `**` の終わり（次の文字の位置）
+};
+
+//! 位置 nAt から始まる太字を読む
+/*!
+	規則：`**` のあと1文字以上（`*` と改行は不可）、そのあと `**`。
+	中身が空（`****`）は太字にしない。
+*/
+inline bool MdParseBoldAt( const wchar_t* pLine, int nLen, int nAt, MdBoldPos* pOut )
+{
+	if( nullptr == pLine || nAt < 0 || nAt + 4 > nLen ){
+		return false;
+	}
+	if( L'*' != pLine[nAt] || L'*' != pLine[nAt + 1] ){
+		return false;
+	}
+	const int nStop = ( nLen < nAt + MD_LINK_MAX_LEN ) ? nLen : ( nAt + MD_LINK_MAX_LEN );
+	int i = nAt + 2;
+	while( i + 1 < nStop ){
+		if( L'\r' == pLine[i] || L'\n' == pLine[i] ){
+			return false;
+		}
+		if( L'*' == pLine[i] ){
+			if( L'*' != pLine[i + 1] ){
+				return false;		// `*` 単体は太字にしない
+			}
+			break;					// 閉じの `**` が来た
+		}
+		++i;
+	}
+	if( i + 1 >= nStop || L'*' != pLine[i] || L'*' != pLine[i + 1] ){
+		return false;				// 閉じが無い
+	}
+	if( i == nAt + 2 ){
+		return false;				// 中身が空
+	}
+	if( pOut ){
+		pOut->nOpenBgn = nAt;
+		pOut->nTextBgn = nAt + 2;
+		pOut->nTextEnd = i;
+		pOut->nCloseEnd = i + 2;
+	}
+	return true;
+}
+
+//! nFrom 以降で最初の太字を探す
+inline bool MdFindNextBold( const wchar_t* pLine, int nLen, int nFrom, MdBoldPos* pOut )
+{
+	if( nullptr == pLine || nLen <= 0 ){
+		return false;
+	}
+	for( int p = ( 0 < nFrom ? nFrom : 0 ); p + 1 < nLen; ++p ){
+		if( L'*' == pLine[p] && MdParseBoldAt( pLine, nLen, p, pOut ) ){
+			return true;
+		}
+	}
+	return false;
+}
+
+//! 位置 nAt に関わっている太字（記号の上・すぐ後ろも含む）を返す
+inline bool MdFindBoldCovering( const wchar_t* pLine, int nLen, int nAt, MdBoldPos* pOut )
+{
+	MdBoldPos bold;
+	int p = 0;
+	while( MdFindNextBold( pLine, nLen, p, &bold ) ){
+		if( bold.nOpenBgn <= nAt && nAt <= bold.nCloseEnd ){
+			if( pOut ){ *pOut = bold; }
+			return true;
+		}
+		if( nAt < bold.nOpenBgn ){
+			break;
+		}
+		p = bold.nCloseEnd;
+	}
+	return false;
+}
+
+//! 位置 i を含む「隠す範囲」の終わりを返す（隠さないなら i をそのまま返す）
+/*!
+	🔥 **隠す＝「幅ゼロにする」＋「描かない」。** この2つは必ず同じ範囲でやること。
+	   片方だけ直すと、文字とカーソル・クリック位置がずれる。
+	   ∴ 隠す範囲の判定はこの関数1本だけを見る（レイアウト・描画の両方から呼ぶ）。
+
+	隠すもの：
+	- 行頭の見出し記号（`#` ＋ うしろの空白）
+	- リンクの `[` と `](URL)`
+
+	@param pLine 行の**先頭**から。途中を指すポインタを渡すと行頭判定を誤る。
+*/
+inline int MdHiddenEndAt( const wchar_t* pLine, int nLen, int i )
+{
+	if( nullptr == pLine || i < 0 || i >= nLen ){
+		return i;
+	}
+	// 見出しの記号
+	if( i < MD_MARKER_MAX && L'#' == pLine[0] ){
+		const int nMarker = MdHeadingMarkerLen( pLine, nLen );
+		if( i < nMarker ){
+			return nMarker;
+		}
+	}
+	// リンクの記号と URL
+	//   🔥 手前にある **いちばん近い `[`** だけを見る。表示テキストにも URL にも
+	//      `[` を入れない規則にしてあるので、これで取りこぼさない。
+	//      行の頭から探し直すと、1文字ごとに行ぜんぶを走査することになって重い。
+	const int nBack = ( i > MD_LINK_MAX_LEN ) ? ( i - MD_LINK_MAX_LEN ) : 0;
+	for( int p = i; p >= nBack; --p ){
+		if( L'[' != pLine[p] ){
+			continue;
+		}
+		MdLinkPos link;
+		if( !MdParseLinkAt( pLine, nLen, p, &link ) ){
+			break;							// 手前の `[` はリンクではない
+		}
+		if( link.nOpen == i ){
+			return link.nTextBgn;			// `[` を隠す
+		}
+		if( link.nTextEnd <= i && i <= link.nUrlEnd ){
+			return link.nUrlEnd + 1;		// `](URL)` を隠す
+		}
+		break;								// 表示テキストの中＝隠さない
+	}
+	// 太字の `**`
+	//   🔥 リンクと同じ考え方で、手前から近い順に「開きの `**`」を探す。
+	for( int p = i; p >= nBack; --p ){
+		if( p + 1 >= nLen || L'*' != pLine[p] || L'*' != pLine[p + 1] ){
+			continue;
+		}
+		MdBoldPos bold;
+		if( !MdParseBoldAt( pLine, nLen, p, &bold ) ){
+			continue;						// ここは開きではない（閉じの `**` など）
+		}
+		if( bold.nCloseEnd <= i ){
+			break;							// i より前で閉じている＝関係ない
+		}
+		if( i < bold.nTextBgn ){
+			return bold.nTextBgn;			// 前の `**` を隠す
+		}
+		if( bold.nTextEnd <= i ){
+			return bold.nCloseEnd;			// 後ろの `**` を隠す
+		}
+		break;								// 中の文字＝隠さない
+	}
+	return i;
 }
 
 #endif /* SAKURA_MARKDOWN_H_ */

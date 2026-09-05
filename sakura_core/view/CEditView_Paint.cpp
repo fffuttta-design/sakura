@@ -656,6 +656,14 @@ void CEditView::OnPaint2( HDC _hdc, PAINTSTRUCT *pPs, BOOL bDrawFromComptibleBmp
 	//      ∴ 描き直す範囲を常に1行ぶん下へ広げて、見出しを描き直させる。
 	if( !m_bMiniMap && IsMarkdownDocument() ){
 		pPs->rcPaint.bottom += nLineHeight;
+		// 🔥 描き直す範囲は**上にも**広げる。
+		//    描き直しは行の升目の上端から始まるが、見出しの字はそれより上へ出ている。
+		//    広げないと、その行だけを描き直したとき（＝見出しに文字を打ったとき）に
+		//    はみ出した頭が切り落とされる（2026-09-05 本人から「文字が見切れてる」と指摘）。
+		pPs->rcPaint.top -= CalcHeadingLift( 1 );
+		if( pPs->rcPaint.top < 0 ){
+			pPs->rcPaint.top = 0;
+		}
 	}
 
 	//サポート
@@ -1118,18 +1126,27 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 		int nPosTo = pcLayout->GetLogicOffset() + pcLayout->GetLengthWithEOL();
 		CFigureManager* pcFigureManager = CFigureManager::getInstance();
 		FigureRenderType prevRenderType = CFigure_Text::RenderType_None;
-		// 【自前改造】Markdown の見出し記号 `#` は「描かない・幅も取らない」
-		//   🔥 レイアウト側（CLayoutMgr::GetLayoutXOfChar）でも幅ゼロにしてある。
-		//      ここで送り位置を進めてしまうと、文字とカーソル・選択範囲がずれる。
-		const int nMdMarkerEnd = ( 0 == pcLayout->GetLogicOffset() && IsMarkdownDocument() )
-			? MdHeadingMarkerLen( cLineStr.GetPtr(), cLineStr.GetLength() ) : 0;
+		// 【自前改造】Markdown で隠す文字（見出しの `#`、リンクの `[` と `](URL)`）は
+		//   「描かない・幅も取らない」。
+		//   🔥 レイアウト側（CLayoutMgr::GetLayoutXOfChar）でも同じ範囲を幅ゼロにしてある。
+		//      判定は util/markdown.h の MdHiddenEndAt 1本。ここで送り位置を進めてしまうと、
+		//      文字とカーソル・選択範囲がずれる。
+		const bool bMdHide = IsMarkdownDocument();
 		while(pInfo->m_nPosInLogic < nPosTo){
-			if( pInfo->m_nPosInLogic < nMdMarkerEnd ){
-				pInfo->m_nPosInLogic = nMdMarkerEnd;	// 記号ぶんを丸ごと飛ばす
-				nPosBgn = nMdMarkerEnd;
-				nPosLength = 0;
-				prevRenderType = CFigure_Text::RenderType_None;
-				continue;
+			if( bMdHide ){
+				const int nMdHideEnd = MdHiddenEndAt( cLineStr.GetPtr(), cLineStr.GetLength(), pInfo->m_nPosInLogic );
+				if( pInfo->m_nPosInLogic < nMdHideEnd ){
+					// 🔥 行の途中にも隠す範囲がある（リンク）。飛ばす前に、そこまでの字を描いておく。
+					nPosLength = pInfo->m_nPosInLogic - nPosBgn;
+					if( 0 < nPosLength ){
+						CFigure_Text::DrawImpBlock(pInfo, nPosBgn, nPosLength);
+					}
+					pInfo->m_nPosInLogic = nMdHideEnd;
+					nPosBgn = nMdHideEnd;
+					nPosLength = 0;
+					prevRenderType = CFigure_Text::RenderType_None;
+					continue;
+				}
 			}
 			int nPosInLogic = pInfo->GetPosInLogic(); // FowardChars/DrawImpで更新される
 			nPosLength = nPosInLogic - nPosBgn;

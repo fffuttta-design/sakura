@@ -276,14 +276,14 @@ public:
 	void ClearLayoutLineWidth( void );				/* 各行のレイアウト行長の記憶をクリアする */		// 2009.08.28 nasukoji
 	//! 1文字ぶんのレイアウト幅（行頭からの通し位置 i を渡すこと）
 	/*!
-		🔥 【自前改造】Markdown の行頭 `#` は幅ゼロにして、見出しの頭を本文とそろえる。
+		🔥 【自前改造】Markdown で隠す文字（行頭の `#`、リンクの `[` と `](URL)`）は幅ゼロにする。
 		   ∴ **pData は必ず「行の先頭」から**渡すこと。行の途中を指すポインタを渡すと
 		   行頭判定を誤る（その用途には GetLayoutXOfCharRaw を使う）。
 		   幅ゼロの文字は異体字セレクタで元からある形なので、変換や折り返しは今までどおり動く。
 	*/
 	CLayoutXInt GetLayoutXOfChar( const wchar_t* pData, int nDataLen, int i ) const {
-		if( m_bMdHeadingHide && i < MD_MARKER_MAX && 0 < nDataLen && L'#' == pData[0] ){
-			if( i < MdHeadingMarkerLen( pData, nDataLen ) ){
+		if( m_bMdHeadingHide && 0 < nDataLen ){
+			if( i < MdHiddenEndAt( pData, nDataLen, i ) ){
 				return CLayoutXInt(0);
 			}
 		}

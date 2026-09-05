@@ -95,6 +95,8 @@ const std::array ColorInfo_DEFAULT = {
 	ColorInfoIni{ STR_COLOR_MDHEAD2,					{ true ,	{ true,		false },	{ RGB(   0,   0,   0 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_MDHEAD3,					{ true ,	{ true,		false },	{ RGB(   0,   0,   0 ),	RGB( 255, 251, 240 ) } } },
 	ColorInfoIni{ STR_COLOR_MDMARK,						{ true ,	{ false,	false },	{ RGB( 255, 251, 240 ),	RGB( 255, 251, 240 ) } } },
+	ColorInfoIni{ STR_COLOR_MDLINK,						{ true ,	{ false,	true  },	{ RGB(  17, 85, 204 ),	RGB( 255, 251, 240 ) } } },
+	ColorInfoIni{ STR_COLOR_MDBOLD,						{ true ,	{ true,		false },	{ RGB(   0,   0,   0 ),	RGB( 255, 251, 240 ) } } },
 };
 
 void GetDefaultColorInfo(ColorInfo* pColorInfo, size_t nIndex) noexcept

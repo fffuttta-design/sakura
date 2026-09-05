@@ -184,6 +184,8 @@ CColorStrategyPool::CColorStrategyPool()
 	m_vStrategies.push_back(new CColor_MdHeading(1, COLORIDX_MDHEAD1));
 	m_vStrategies.push_back(new CColor_MdHeading(2, COLORIDX_MDHEAD2));
 	m_vStrategies.push_back(new CColor_MdHeading(3, COLORIDX_MDHEAD3));
+	m_vStrategies.push_back(new CColor_MdLink);	// リンクの表示テキスト（青＋下線）
+	m_vStrategies.push_back(new CColor_MdBold);	// 太字（**文字**）
 	m_vStrategies.push_back(new CColor_RegexKeyword);		// 正規表現キーワード
 	m_vStrategies.push_back(new CColor_Heredoc);			// ヒアドキュメント
 	m_vStrategies.push_back(new CColor_BlockComment(COLORIDX_BLOCK1));	// ブロックコメント
@@ -339,7 +341,7 @@ void CColorStrategyPool::OnChangeSetting(void)
 	if( m_bSkipBeforeLayoutGeneral ){
 		for( const CColorStrategy* pStrategy : m_vStrategiesDisp ){
 			const EColorIndexType eColor = pStrategy->GetStrategyColor();
-			if( COLORIDX_MDHEAD1 <= eColor && eColor <= COLORIDX_MDMARK ){
+			if( COLORIDX_MDHEAD1 <= eColor && eColor <= COLORIDX_MDBOLD ){
 				m_bSkipBeforeLayoutGeneral = false;
 				break;
 			}

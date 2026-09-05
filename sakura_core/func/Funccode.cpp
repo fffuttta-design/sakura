@@ -144,6 +144,8 @@ const EFunctionCode pnFuncList_Edit[] = {	//Oct. 16, 2000 JEPRO 変数名変更(
 	F_SORT_ASC			,	//選択行の昇順ソート	2001.12.06 hor
 	F_SORT_DESC			,	//選択行の降順ソート	2001.12.06 hor
 	F_MERGE				,	//選択行のマージ		2001.12.06 hor
+	F_MD_LINK			,	//Markdownのリンクを仕込む／直す	【自前改造】
+	F_MD_BOLD			,	//Markdownの太字				【自前改造】
 	F_RECONVERT				//再変換 				2002.04.09 minfu
 //		F_WORDSREFERENCE		//単語リファレンス
 };

@@ -124,6 +124,9 @@ public:
 	void Command_DELETE( void );			/* カーソル位置または選択エリアを削除 */
 	void Command_DELETE_BACK( void );		/* カーソル前を削除 */
 	bool DeleteBack_MdHeadingMarker( void );	/* 【自前改造】見出しの頭で BackSpace → 見出しをやめる */
+	void Command_MD_LINK( void );				/* 【自前改造】Markdownのリンクを仕込む／直す（Ctrl+K） */
+	void Command_MD_BOLD( void );				/* 【自前改造】Markdownの太字（Ctrl+B） */
+	void MdReplaceLogic( const CLogicRange& sRange, const std::wstring& strNew, int nCaretOffset );	/* 【自前改造】論理位置で書き換えてレイアウトを作り直す */
 	void Command_WordDeleteToStart( void );	/* 単語の左端まで削除 */
 	void Command_WordDeleteToEnd( void );	/* 単語の右端まで削除 */
 	void Command_WordCut( void );			/* 単語切り取り */

@@ -1157,6 +1157,23 @@ void CEditWnd::MessageLoop( void )
 						continue;	// 補完ウィンドウが処理を実行した
 			}
 
+			// 【自前改造】.md では Ctrl+K＝リンク、Ctrl+B＝太字 に使う。
+			//   🔥 アクセラレータより**先に**横取りする必要がある。
+			//      Ctrl+K は本家では「行末まで切り取り」、Ctrl+B は「ブラウザで開く」に
+			//      割り当たっていて、しかも設定ファイルに保存済みなので、
+			//      既定の割り当て表を書き換えただけでは既存の設定に負ける。
+			//   .md 以外では横取りしない＝本家の割り当てがそのまま効く。
+			if( WM_KEYDOWN == msg.message && ( 'K' == msg.wParam || 'B' == msg.wParam )
+			 && 0 > (short)::GetKeyState( VK_CONTROL )
+			 && 0 <= (short)::GetKeyState( VK_SHIFT )
+			 && 0 <= (short)::GetKeyState( VK_MENU )
+			 && msg.hwnd == GetActiveView().GetHwnd()
+			 && GetActiveView().GetDocument()->IsMarkdownDocument() ){
+				GetActiveView().GetCommander().HandleCommand(
+					( 'K' == msg.wParam ) ? F_MD_LINK : F_MD_BOLD, true, 0, 0, 0, 0 );
+				continue;
+			}
+
 			if( m_hAccel && TranslateAccelerator( msg.hwnd, m_hAccel, &msg ) ){}
 			//通常メッセージ
 			else{

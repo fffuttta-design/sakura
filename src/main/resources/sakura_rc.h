@@ -1541,6 +1541,8 @@
 #define STR_COLOR_MDHEAD2               34728
 #define STR_COLOR_MDHEAD3               34729
 #define STR_COLOR_MDMARK                34730
+#define STR_COLOR_MDLINK                34731
+#define STR_COLOR_MDBOLD                34732
 #define STR_ERR_CSPLITTER01             34735
 #define STR_TABWND_LR_INFO              34736
 #define STR_TABWND_CLOSETAB             34737
