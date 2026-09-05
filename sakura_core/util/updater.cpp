@@ -174,18 +174,22 @@ std::wstring GetLastUpdateCheckTime()
 	return szBuf;
 }
 
-bool StartUpdate()
+bool StartUpdate( std::wstring* pstrError )
 {
+	const auto fail = [pstrError]( const wchar_t* pszWhy ) -> bool {
+		if( pstrError ){ *pstrError = pszWhy; }
+		return false;
+	};
 	const std::wstring strDist = FindDistDir();
 	if( strDist.empty() ){
-		return false;
+		return fail( L"配布フォルダー（H:\\マイドライブ\\ツール開発\\SakuraEditorPlus\\配布\\app）が見つかりません。" );
 	}
 	const std::wstring strSelf = GetSelfDir();
 
 	WCHAR szTemp[_MAX_PATH];
 	szTemp[0] = L'\0';
 	if( 0 == ::GetTempPath( _countof(szTemp), szTemp ) ){
-		return false;
+		return fail( L"一時フォルダーの場所が取れませんでした。" );
 	}
 
 	// 更新の実体は同梱の updater.ps1（「更新しています」の窓と進捗バーを出す）。
@@ -193,17 +197,35 @@ bool StartUpdate()
 	// （導入先で直接動かすと、自分を上書きしようとして失敗する）
 	const std::wstring strSrcScript = strSelf + L"\\updater.ps1";
 	if( !fexist( strSrcScript.c_str() ) ){
-		return false;	// 同梱漏れ。呼び出し側でメッセージを出す
+		return fail( L"updater.ps1 が入っていません（アプリのフォルダーを確認してください）。" );
 	}
 	std::wstring strRunScript = szTemp;
 	strRunScript += L"SakuraEditorPlus-update.ps1";
 	if( !::CopyFile( strSrcScript.c_str(), strRunScript.c_str(), FALSE ) ){
-		return false;
+		WCHAR szWhy[256];
+		::_snwprintf_s( szWhy, _countof(szWhy), _TRUNCATE,
+			L"更新スクリプトを一時フォルダーへ写せませんでした（エラー %u）。", ::GetLastError() );
+		return fail( szWhy );
+	}
+
+	// 🔥 powershell.exe は**フルパスで**起動する。PATH 頼みだと、環境によっては
+	//    CreateProcess が「ファイルが見つかりません」で落ちて、更新が始まらない。
+	WCHAR szSys[_MAX_PATH];
+	szSys[0] = L'\0';
+	if( 0 == ::GetSystemDirectory( szSys, _countof(szSys) ) ){
+		return fail( L"Windows のシステムフォルダーの場所が取れませんでした。" );
+	}
+	std::wstring strPwsh = szSys;
+	strPwsh += L"\\WindowsPowerShell\\v1.0\\powershell.exe";
+	if( !fexist( strPwsh.c_str() ) ){
+		strPwsh = L"powershell.exe";	// 念のため PATH 頼みへ落とす
 	}
 
 	// 引数のパスは空白を含むので必ず引用符で囲む
 	std::wstring strCmd;
-	strCmd += L"powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"";
+	strCmd += L"\"";
+	strCmd += strPwsh;
+	strCmd += L"\" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"";
 	strCmd += strRunScript;
 	strCmd += L"\" -SrcDir \"";
 	strCmd += strDist;
@@ -221,7 +243,10 @@ bool StartUpdate()
 	PROCESS_INFORMATION pi = {};
 	if( !::CreateProcess( nullptr, vCmd.data(), nullptr, nullptr, FALSE,
 			CREATE_NO_WINDOW, nullptr, szTemp, &si, &pi ) ){
-		return false;
+		WCHAR szWhy[256];
+		::_snwprintf_s( szWhy, _countof(szWhy), _TRUNCATE,
+			L"更新スクリプトを起動できませんでした（エラー %u）。", ::GetLastError() );
+		return fail( szWhy );
 	}
 	::CloseHandle( pi.hThread );
 	::CloseHandle( pi.hProcess );

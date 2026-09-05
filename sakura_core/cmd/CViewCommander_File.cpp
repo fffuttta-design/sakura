@@ -1154,8 +1154,14 @@ void CViewCommander::Command_CHECK_UPDATE( void )
 		return;
 	}
 
-	if( !StartUpdate() ){
-		::MessageBox( hwndOwner, L"更新を開始できませんでした。", L"更新の確認", MB_OK | MB_ICONWARNING );
+	std::wstring strUpdErr;
+	if( !StartUpdate( &strUpdErr ) ){
+		std::wstring strMsg = L"更新を開始できませんでした。";
+		if( !strUpdErr.empty() ){
+			strMsg += L"\n\n";
+			strMsg += strUpdErr;
+		}
+		::MessageBox( hwndOwner, strMsg.c_str(), L"更新の確認", MB_OK | MB_ICONWARNING );
 		return;
 	}
 	// 更新スクリプトが全プロセスの終了を待っているので、速やかに全部閉じる

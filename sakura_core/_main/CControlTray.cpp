@@ -117,8 +117,14 @@ static void CheckUpdateAndAsk( HWND hwnd )
 		return;	// 「後で」。次に新しい版が出るまでは聞かない
 	}
 
-	if( !StartUpdate() ){
-		::MessageBox( hwnd, L"更新を開始できませんでした。", L"アップデート", MB_OK | MB_ICONWARNING );
+	std::wstring strUpdErr;
+	if( !StartUpdate( &strUpdErr ) ){
+		std::wstring strMsg = L"更新を開始できませんでした。";
+		if( !strUpdErr.empty() ){
+			strMsg += L"\n\n";
+			strMsg += strUpdErr;
+		}
+		::MessageBox( hwnd, strMsg.c_str(), L"アップデート", MB_OK | MB_ICONWARNING );
 		return;
 	}
 	// 更新スクリプトが全プロセスの終了を待っている。制御プロセスも含めて全部閉じる

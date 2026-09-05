@@ -101,6 +101,11 @@ std::wstring GetLastUpdateCheckTime();
 	@retval true  更新スクリプトを起動した（呼び出し側は速やかに終了すること）
 	@retval false 起動できなかった
 */
-bool StartUpdate();
+//! 更新を始める。失敗したら false（pstrError に「どこで失敗したか」を入れる）
+/*!
+	@param[out] pstrError 失敗した理由。原因が分からないまま「開始できませんでした」だけ出ると
+	                      追いようがないので、必ず理由を持ち帰る（2026-09-05 本人が遭遇）。
+*/
+bool StartUpdate( std::wstring* pstrError = nullptr );
 
 #endif /* SAKURA_UPDATER_H_ */
