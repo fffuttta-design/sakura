@@ -529,7 +529,11 @@ void CCaret::ShowEditCaret()
 	SetCaretSize(nCaretWidth,nCaretHeight);
 	POINT ptDrawPos=CalcCaretDrawPos(GetCaretLayoutPos());
 	SetCaretSize(caretSizeOld.cx, caretSizeOld.cy); // 後で比較するので戻す
-	if ( m_pEditView->GetTextArea().GetAreaLeft() <= ptDrawPos.x && m_pEditView->GetTextArea().GetAreaTop() <= ptDrawPos.y
+	// 🔥【自前改造】見出しの行はカーソルを升目より上へ置く（字と同じ位置にするため）。
+	//    ∴ 「表示域の中か」を素の上端で判定すると、**1行目が見出しのときだけカーソルが消える**
+	//    （表示域より上と見なされる。2026-09-05 実測で発見）。ずらした量ぶん上まで許す。
+	const int nCaretAreaTop = m_pEditView->GetTextArea().GetAreaTop() - m_pEditView->GetHeadingLiftAtCaret();
+	if ( m_pEditView->GetTextArea().GetAreaLeft() <= ptDrawPos.x && nCaretAreaTop <= ptDrawPos.y
 		&& ptDrawPos.x < m_pEditView->GetTextArea().GetAreaRight() && ptDrawPos.y < m_pEditView->GetTextArea().GetAreaBottom() ){
 		// 画面内ならキャレットを表示する
 		;
@@ -1096,6 +1100,16 @@ POINT CCaret::CalcCaretDrawPos(const CLayoutPoint& ptCaretPos) const
 		nPosY = m_pEditView->GetTextArea().GetAreaTop()
 			+ (Int)(nY) * m_pEditView->GetTextMetrics().GetHankakuDy()
 			+ m_pEditView->GetTextMetrics().GetHankakuHeight() - GetCaretSize().cy; //下寄せ
+		// 【自前改造】Markdown の見出しの行は、字を升目より上へずらして描いている。
+		//   🔥 カーソルも**字と同じ位置**に置く。ここを合わせないと、見出しの行だけ
+		//      カーソルが字より上に浮いて「大きさが合っていない」ように見える
+		//      （2026-09-05 本人から指摘）。
+		//   ＝升目の上端から、ずらした量だけ上。高さは見出しの字の高さ（ShowEditCaret で設定済み）。
+		if( ptCaretPos.y == GetCaretLayoutPos().y && 0 < m_pEditView->GetHeadingLevelAtCaret() ){
+			nPosY = m_pEditView->GetTextArea().GetAreaTop()
+				+ (Int)(nY) * m_pEditView->GetTextMetrics().GetHankakuDy()
+				- m_pEditView->GetHeadingLiftAtCaret();
+		}
 	}
 
 	return CMyPoint(nPosX,nPosY);
