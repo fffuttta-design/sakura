@@ -324,6 +324,8 @@ struct MdBoldPos {
 /*!
 	規則：`**` のあと1文字以上（`*` と改行は不可）、そのあと `**`。
 	中身が空（`****`）は太字にしない。
+	🔥 **Ctrl+B を押しただけでは `****` を入れない**（入れると中身が無いまま残る）。
+	   押した時点では「次に打つ字を太字にする」印だけを立て、字が来たときに `**字**` を作る。
 */
 inline bool MdParseBoldAt( const wchar_t* pLine, int nLen, int nAt, MdBoldPos* pOut )
 {
@@ -351,7 +353,7 @@ inline bool MdParseBoldAt( const wchar_t* pLine, int nLen, int nAt, MdBoldPos* p
 		return false;				// 閉じが無い
 	}
 	if( i == nAt + 2 ){
-		return false;				// 中身が空
+		return false;				// 中身が空（`****`）は太字にしない
 	}
 	if( pOut ){
 		pOut->nOpenBgn = nAt;

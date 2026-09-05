@@ -135,6 +135,16 @@ public:
 	//      その文字はカーソルと同じ位置から右へ伸びる。∴ 消さないとカーソルが1文字目に
 	//      重なって「文字を貫通している」ように見える（2026-09-05 本人から指摘）。
 	bool IsImeComposing() const { return m_bImeComposing; }
+
+	//! 【自前改造】Ctrl+B のあと「次に打つ字を太字にする」印
+	/*!
+		🔥 Ctrl+B を押した時点では文書を触らない。`****` を先に入れてしまうと、
+		   何も打たずに離れたときに**見えないゴミ**が残るため（2026-09-05 本人指示）。
+		   印が立っている間に字が来たら、その字を `**字**` にして入れる。
+		   カーソルが動いた時点で印は消える（CCaret::MoveCursor）。
+	*/
+	bool IsMdBoldPending() const { return m_bMdBoldPending; }
+	void SetMdBoldPending( bool b ){ m_bMdBoldPending = b; }
 private:
 	void UpdateHeadingFonts();
 	//! 【自前改造】見出しの字（LOGFONT）を組み立てる。画面とIMEで共用する
@@ -147,6 +157,8 @@ private:
 	int m_nImeFontLevel = -1;
 	//! 【自前改造】日本語入力の変換中か（WM_IME_STARTCOMPOSITION 〜 WM_IME_ENDCOMPOSITION）
 	bool m_bImeComposing = false;
+	//! 【自前改造】Ctrl+B のあと「次に打つ字を太字にする」印
+	bool m_bMdBoldPending = false;
 	//! 【自前改造】いま描いている行の「上へのずらし量」（見出しの下に余白を作るため）
 	int m_nMdHeadingLift = 0;
 public:

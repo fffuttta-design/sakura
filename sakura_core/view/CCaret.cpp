@@ -131,6 +131,11 @@ CLayoutInt CCaret::MoveCursor(
 	bool			bVertLineDoNotOFF	//!< [in] カーソル位置縦線を消去しない
 )
 {
+	// 【自前改造】カーソルが動いたら「次の字を太字にする」印は消す。
+	//   🔥 Ctrl+B を押したあとクリックや矢印で離れたら、その気は無くなったと見なす。
+	//      文字を入れる側（Command_WCHAR / Command_INSTEXT）は入れ終わったあとで印を立て直す。
+	m_pEditView->SetMdBoldPending( false );
+
 	CTextArea& area = m_pEditView->GetTextArea();
 	// スクロール処理
 	CLayoutInt	nScrollRowNum = CLayoutInt(0);

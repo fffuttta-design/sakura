@@ -39,6 +39,10 @@ void CViewCommander::Command_WCHAR( wchar_t wcChar, bool bConvertEOL )
 		ErrorBeep();
 		return;
 	}
+	// 【自前改造】Ctrl+B の直後なら、この字は太字の中へ入れる
+	if( MdInsertBold( &wcChar, 1 ) ){
+		return;
+	}
 
 	CLogicInt		nPos;
 	CLogicInt		nCharChars;
@@ -1385,6 +1389,14 @@ void CViewCommander::Command_MD_BOLD( void )
 		}
 	}
 
+	// 🔥 「これから太字」の印が立っている最中に押されたら、**やめる合図**として印を下ろすだけ。
+	//    ここを通さないと、Ctrl+B → 打つ → Ctrl+B としたときに、
+	//    いま打ったばかりの太字が外れてしまう（打ち終わりでカーソルが太字の直後にいるため）。
+	if( !bSelected && pView->IsMdBoldPending() ){
+		pView->SetMdBoldPending( false );
+		return;
+	}
+
 	// いま太字の中にいるなら外す
 	MdBoldPos bold;
 	bool bUnbold = false;
@@ -1408,15 +1420,81 @@ void CViewCommander::Command_MD_BOLD( void )
 		sRange.SetTo(   CLogicPoint( CLogicInt(nTo),   nLineY ) );
 		nCaretOffset = (int)strNew.length();
 	}else{
-		// 何も選んでいないときは、空の太字を置いて真ん中にカーソルを入れる
-		strNew = L"****";
-		sRange.SetFrom( CLogicPoint( CLogicInt(nFrom), nLineY ) );
-		sRange.SetTo(   CLogicPoint( CLogicInt(nFrom), nLineY ) );
-		nCaretOffset = 2;
+		// 🔥 何も選んでいないときは**文書を触らない**。「次に打つ字を太字にする」印を立てるだけ。
+		//    `****` を先に置くと、何も打たずに離れたときに見えないゴミが残る（2026-09-05 本人指示）。
+		//    実際に太字にするのは MdInsertBold（字が来たときに `**字**` を作る）。
+		pView->SetMdBoldPending( !pView->IsMdBoldPending() );
+		return;
 	}
 
 	if( bSelected ){
 		cSelect.DisableSelectArea( false );
 	}
 	MdReplaceLogic( sRange, strNew, nCaretOffset );
+}
+
+//! 【自前改造】Ctrl+B のあとに打った字を、太字の中に入れる
+/*!
+	ふたMEMO と同じ書き味にするための仕掛け。**Ctrl+B を押した時点では文書を触らない**
+	（`****` を先に置くと、何も打たずに離れたときに見えないゴミが残る）。
+	印が立っている間に字が来たら：
+	- まだ太字が無ければ `**字**` を作る
+	- すでに作ってあれば、閉じの `**` の**手前**に足す（続けて打てば全部太字になる）
+
+	🔥 カーソルは「閉じの `**` の後ろ」に置く。記号は幅ゼロなので見た目の位置は字の直後で、
+	   次の字も同じ判定でまた中へ入る。カーソルを動かした時点で印は消える（CCaret::MoveCursor）。
+
+	@return 太字として入れたら true（呼び出し元はふつうの挿入をしない）
+*/
+bool CViewCommander::MdInsertBold( const wchar_t* pszText, int nTextLen )
+{
+	CEditView* pView = m_pCommanderView;
+	if( !pView->IsMdBoldPending() || nTextLen <= 0 || nullptr == pszText ){
+		return false;
+	}
+	if( !GetDocument()->IsMarkdownDocument() ){
+		return false;
+	}
+	if( pView->GetSelectionInfo().IsTextSelected() ){
+		return false;
+	}
+	for( int i = 0; i < nTextLen; ++i ){
+		if( L'\r' == pszText[i] || L'\n' == pszText[i] || L'*' == pszText[i] ){
+			return false;		// 改行や `*` は太字の中に入れない
+		}
+	}
+
+	const CLogicPoint ptCaret = GetCaret().GetCaretLogicPos();
+	const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( ptCaret.GetY2() );
+	CLogicInt nLineLen = CLogicInt(0);
+	const wchar_t* pLine = ( nullptr != pcDocLine ) ? pcDocLine->GetDocLineStrWithEOL( &nLineLen ) : nullptr;
+	if( nullptr == pLine ){
+		pLine = L"";
+		nLineLen = CLogicInt(0);
+	}
+
+	std::wstring strNew;
+	CLogicRange sRange;
+	int nCaretOffset = 0;
+	MdBoldPos bold;
+	if( MdFindBoldCovering( pLine, (Int)nLineLen, (Int)ptCaret.GetX2(), &bold )
+	 && (Int)ptCaret.GetX2() == bold.nCloseEnd ){
+		// すでにある太字の、閉じ `**` の手前へ足す
+		strNew.assign( pszText, nTextLen );
+		sRange.SetFrom( CLogicPoint( CLogicInt(bold.nTextEnd), ptCaret.GetY2() ) );
+		sRange.SetTo(   CLogicPoint( CLogicInt(bold.nTextEnd), ptCaret.GetY2() ) );
+		nCaretOffset = nTextLen + 2;	// 閉じの `**` の後ろへ
+	}else{
+		// 新しく `**字**` を作る
+		strNew = L"**";
+		strNew.append( pszText, nTextLen );
+		strNew += L"**";
+		sRange.SetFrom( ptCaret );
+		sRange.SetTo( ptCaret );
+		nCaretOffset = (int)strNew.length();
+	}
+
+	MdReplaceLogic( sRange, strNew, nCaretOffset );
+	pView->SetMdBoldPending( true );	// 続けて打てるように印を立て直す
+	return true;
 }

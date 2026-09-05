@@ -482,6 +482,12 @@ void CViewCommander::Command_INSTEXT(
 		nTextLen = wcslen( pszText );
 	}
 
+	// 【自前改造】Ctrl+B の直後なら、この字は太字の中へ入れる（日本語入力の確定文字もここを通る）
+	if( !bLinePaste && !bFastMode && nullptr == pcSelectLogic
+	 && MdInsertBold( pszText, (int)nTextLen ) ){
+		return;
+	}
+
 	CWaitCursor cWaitCursor( m_pCommanderView->GetHwnd(),
 		10000 < nTextLen && !m_pCommanderView->GetSelectionInfo().IsBoxSelecting() );
 
