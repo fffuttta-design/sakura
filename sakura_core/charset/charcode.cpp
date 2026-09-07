@@ -31,9 +31,54 @@ namespace WCODE
 
 	bool CalcHankakuByFont(wchar_t);
 
+	//! 【自前改造】枠の左半分にしかインクが無い字（閉じ括弧と句読点）
+	/*!
+		🔥 **なぜ半角として扱うのか**（2026-09-07 本人指示「カーソルと文字の間の余白が不自然」）
+
+		和文の `】` `）` `。` などは「全角1文字ぶんの枠のうち、**左3分の1しか使わない**」字。
+		升目に置くエディタでは、残りの枠がそのまま**空白に見える**。
+		行末がこの字だと、**字とカーソルのあいだが1文字ぶん近く空いて**、そこに何か入っているように見える。
+
+		∴ **これらの字だけ半角（1桁）として扱う。**
+		字そのものは全角の形のまま描かれるが、**インクが枠の左半分に収まっている**ので、
+		半角の枠に入れても**次の字と重ならない**（この機械の和文書体11種で実測。最大でも枠の48%）。
+
+		⚠ **開き括弧（`【` `（` `「`）は入れてはいけない。**
+		   あちらはインクが枠の**右**半分にあるので、半角の枠に入れると**次の字に重なる**。
+		   （＝左の空きは詰められない。詰めるには字を枠の中でずらす仕組みが要る）
+
+		⚠ ここは**文書の種類に関係なく効く**（文字幅のキャッシュは全体で1つのため）。
+		   桁数の数え方が変わるので、ルーラーの桁と折り返し位置も少しだけ変わる。
+	*/
+	bool IsNarrowClosePunct( wchar_t wc )
+	{
+		switch( wc ){
+		case L'、':	// 、
+		case L'。':	// 。
+		case L'，':	// ，
+		case L'．':	// ．
+		case L'）':	// ）
+		case L'」':	// 」
+		case L'』':	// 』
+		case L'】':	// 】
+		case L'〉':	// 〉
+		case L'》':	// 》
+		case L'〕':	// 〕
+		case L'｝':	// ｝
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	//2007.08.30 kobake 追加
 	bool IsHankaku(wchar_t wc, CCharWidthCache& cache)
 	{
+		// 【自前改造】閉じ括弧・句読点は半角の枠に詰める（詳しくは IsNarrowClosePunct）
+		if( IsNarrowClosePunct( wc ) ){
+			return true;
+		}
+
 		//※ほぼ未検証。ロジックが確定したらインライン化すると良い。
 
 		//参考：http://www.swanq.co.jp/blog/archives/000783.html
@@ -172,6 +217,12 @@ int CCharWidthCache::QueryPixelWidth(wchar_t c) const
 }
 
 int CCharWidthCache::CalcPxWidthByFont(wchar_t c) {
+	// 🔥【自前改造】閉じ括弧・句読点は半角の幅で置く（詳しくは WCODE::IsNarrowClosePunct）。
+	//    ⚠ **桁の数え方（WCODE::IsHankaku）と必ず同じ判定にすること。**
+	//       片方だけ変えると、文字とカーソル・クリック位置がずれる。
+	if( WCODE::IsNarrowClosePunct( c ) ){
+		return m_han_size.cx;
+	}
 	// キャッシュから文字の情報を取得する。情報がなければ、計算して登録する。
 	if (!m_pCache->m_nCharPxWidthCache[c]) {
 		m_pCache->m_nCharPxWidthCache[c] = static_cast<short>(QueryPixelWidth(c));

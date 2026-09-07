@@ -275,6 +275,9 @@ void InitCharWidthCacheFromDC(const LOGFONT* lfs, ECharWidthFontMode fMode, HDC 
 
 namespace WCODE {
 	//!半角文字(縦長長方形)かどうか判定
+	//! 【自前改造】枠の左半分にしかインクが無い字（閉じ括弧・句読点）＝半角の枠に詰める
+	//   実体と理由は charcode.cpp を見ること。
+	bool IsNarrowClosePunct( wchar_t wc );
 	bool IsHankaku(wchar_t wc, CCharWidthCache& cache = GetCharWidthCache());
 	//!全角文字(正方形)かどうか判定
 	inline bool IsZenkaku(wchar_t wc, CCharWidthCache& cache = GetCharWidthCache()) {
