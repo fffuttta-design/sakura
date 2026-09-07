@@ -1269,9 +1269,15 @@ bool CEditView::MakeHeadingLogfont( int nLevel, LOGFONT* pOut ) const
 		::wcscpy_s( lfHead.lfFaceName, MD_HEADING_FACE );
 	}
 	lfHead.lfHeight = -nHeight;	// 負＝文字そのものの高さ
-	// 🔥 lfWidth は升目の半角幅で固定する（横にはみ出させない）。
+	// 🔥 lfWidth は升目の半角幅を基準にする（横にはみ出させない）。
 	//    0（おまかせ）にすると背が高いぶん横にも太り、**漢字が隣と重なって読めない**。
-	lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth();
+	// 🔥 そこから MD_HEADING_NARROW だけ細くする＝**見出しだけ字間が空く**。
+	//    文字の置き場所は本文フォントの幅から作られていて見出しフォントでは変わらないので、
+	//    細くしてもカーソル・クリック位置は1ミリも動かない（詳しくは markdown.h）。
+	lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth() - MD_HEADING_NARROW;
+	if( lfHead.lfWidth < 1 ){
+		lfHead.lfWidth = 1;
+	}
 	// 🔥 輪郭から描かせる。ＭＳ ゴシックのような字は小さい大きさ用の
 	//    「絵（ビットマップ）」を持っていて、既定の品質だとそれを引き伸ばす。
 	//    引き伸ばした絵は線の太さがバラついて**インクが滲んだように見える**。
