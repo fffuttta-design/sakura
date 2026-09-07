@@ -1337,7 +1337,14 @@ void CEditView::SetFont()
 				}
 			}
 		}
-		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), DpiScaleY(nLineSpace), DpiScaleX(m_pTypeData->m_nColumnSpace));
+		// 🔥【自前改造】.md のときは文字と文字の隙間も少し広げる（見出しの窮屈さ対策）。
+		//    ⚠ レイアウト側（CLayoutMgr::Init の m_nSpacing）と**必ず同じ値**にすること。
+		//       片方だけ広げると、文字は動くのにカーソルが元の場所に残る。
+		int nColmSpace = m_pTypeData->m_nColumnSpace;
+		if( !m_bMiniMap && IsMarkdownDocument() ){
+			nColmSpace += MD_CHAR_SPACING;
+		}
+		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), DpiScaleY(nLineSpace), DpiScaleX(nColmSpace));
 	}
 
 	hdc = nullptr;

@@ -89,6 +89,14 @@ static void CheckUpdateAndAsk( HWND hwnd )
 		return;
 	}
 
+	// 🔥 更新を実行できない置き方（updater.ps1 が無い＝開発ビルドを直に動かしている等）では、
+	//    自動では聞かない。聞いても必ず失敗するうえ、本人が別の作業をしている画面に窓が出る
+	//    （2026-09-07、開発ビルドを起動しっぱなしにしていて実際にやってしまった）。
+	//    ⚠ 手動の「今すぐ最新版を確認」は止めないこと（理由が出なくなる）。
+	if( !IsUpdatableInstall() ){
+		return;
+	}
+
 	const SUpdateCheckResult res = CheckUpdate();
 	if( !res.m_bAvailable ){
 		return;

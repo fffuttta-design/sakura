@@ -88,6 +88,16 @@ struct SUpdateCheckResult {
 //! 更新があるか調べる（ファイルを見るだけ。数ミリ秒）
 SUpdateCheckResult CheckUpdate();
 
+//! この置き方で更新を実行できるか（同じフォルダーに updater.ps1 があるか）
+/*!
+	🔥 **自動で聞きに行く前に必ずこれを見る。**
+	   開発ビルド（`x64\Debug\sakura.exe`）を直に動かしているときは updater.ps1 が無いので、
+	   聞いても必ず「更新を開始できませんでした」で終わる。しかも本人の画面に窓が出る
+	   （2026-09-07、開発ビルドを起動しっぱなしにしていて実際に出した）。
+	⚠ **手動の「今すぐ最新版を確認」はこれで止めない。** 止めると理由が出なくなる。
+*/
+bool IsUpdatableInstall();
+
 //! 最終確認日時を記録する／読む（配布フォルダーではなく自分の導入先に置く）
 void         SetLastUpdateCheckTime();
 std::wstring GetLastUpdateCheckTime();

@@ -124,6 +124,12 @@ SAppVersion GetDistVersion()
 	return GetExeVersion( strExe.c_str() );
 }
 
+bool IsUpdatableInstall()
+{
+	const std::wstring strScript = GetSelfDir() + L"\\updater.ps1";
+	return fexist( strScript.c_str() );
+}
+
 SUpdateCheckResult CheckUpdate()
 {
 	SUpdateCheckResult res;

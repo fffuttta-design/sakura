@@ -146,7 +146,10 @@ void CLayoutMgr::SetLayoutInfo(
 	if (nTsvModeOld != nTsvMode && nTsvMode != TSV_MODE_NONE) {
 		m_tsvInfo.CalcTabLength(this->m_pcDocLineMgr);
 	}
-	m_nSpacing = DpiScaleX(refType.m_nColumnSpace);
+	// 【自前改造】.md のときは文字と文字の隙間を少し広げる（見出しの窮屈さ対策）。
+	//   🔥 レイアウト側（ここ）と描画側（CEditView::SetFont の CTextMetrics::Update）で
+	//      **必ず同じ値**にすること。片方だけ広げると文字とカーソルがずれる。
+	m_nSpacing = DpiScaleX(refType.m_nColumnSpace + ( m_bMdHeadingHide ? MD_CHAR_SPACING : 0 ));
 	if( nCharLayoutXPerKeta == -1 )
 	{
 		// Viewが持ってるフォント情報は古い、しょうがないので自分で作る
