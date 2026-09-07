@@ -43,6 +43,10 @@ void CViewCommander::Command_WCHAR( wchar_t wcChar, bool bConvertEOL )
 	if( MdInsertBold( &wcChar, 1 ) ){
 		return;
 	}
+	// 【自前改造】見出し記号の中に空白を溜めない（打っても画面は変わらないので捨ててよい）
+	if( MdSwallowMarkerSpace( &wcChar, 1 ) ){
+		return;
+	}
 
 	CLogicInt		nPos;
 	CLogicInt		nCharChars;
@@ -1462,6 +1466,44 @@ void CViewCommander::Command_MD_BOLD( void )
 
 	@return 太字として入れたら true（呼び出し元はふつうの挿入をしない）
 */
+/*! 見出し記号の中に空白が溜まるのを防ぐ（【自前改造】2026-09-07）
+
+	🔥 **なぜ要るか。** 見出しの記号（`#` ＋ うしろの空白）は幅ゼロで隠してある。
+	   ∴ 見出しの行の**文字の先頭で空白を打つと、その空白は記号に飲み込まれて消える**
+	   ＝ 打っても画面が1ドットも変わらないのに、ファイルの中には1文字ずつ溜まっていく。
+	   本人のメモが `#  【題】`（空白2つ）になっていたのはこれ（2026-09-07 実際に再現）。
+
+	∴ **記号の中に入る空白は、そもそも入れない。** 見た目は打っても打たなくても同じなので、
+	   捨てても失うものは無い。
+
+	@return 飲み込んだら true（呼び出し元はふつうの挿入をしない）
+*/
+bool CViewCommander::MdSwallowMarkerSpace( const wchar_t* pszText, int nTextLen )
+{
+	if( nullptr == pszText || nTextLen <= 0 || !GetDocument()->IsMarkdownDocument() ){
+		return false;
+	}
+	// 入れようとしているのが「空白だけ」でなければ関係ない
+	for( int i = 0; i < nTextLen; ++i ){
+		if( !MdIsSpace( pszText[i] ) ){
+			return false;
+		}
+	}
+	const CLogicPoint ptCaret = GetCaret().GetCaretLogicPos();
+	const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( ptCaret.GetY2() );
+	if( nullptr == pcDocLine ){
+		return false;
+	}
+	CLogicInt nLen = CLogicInt(0);
+	const wchar_t* pLine = pcDocLine->GetDocLineStrWithEOL( &nLen );
+	int nTextStart = 0;
+	if( nullptr == pLine || !MdParseHeading( pLine, (int)nLen, nullptr, &nTextStart ) ){
+		return false;
+	}
+	// 記号の中（＝本文の頭より左）に入れようとしているときだけ捨てる
+	return ( ptCaret.GetX2() <= CLogicInt(nTextStart) );
+}
+
 bool CViewCommander::MdInsertBold( const wchar_t* pszText, int nTextLen )
 {
 	CEditView* pView = m_pCommanderView;

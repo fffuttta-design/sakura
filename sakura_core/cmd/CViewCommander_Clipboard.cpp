@@ -488,6 +488,12 @@ void CViewCommander::Command_INSTEXT(
 		return;
 	}
 
+	// 【自前改造】見出し記号の中に空白を溜めない（日本語入力の全角スペースもここを通る）
+	if( !bLinePaste && !bFastMode && nullptr == pcSelectLogic
+	 && MdSwallowMarkerSpace( pszText, (int)nTextLen ) ){
+		return;
+	}
+
 	CWaitCursor cWaitCursor( m_pCommanderView->GetHwnd(),
 		10000 < nTextLen && !m_pCommanderView->GetSelectionInfo().IsBoxSelecting() );
 
