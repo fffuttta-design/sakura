@@ -78,7 +78,8 @@ constexpr double MD_LINE_HEIGHT_SCALE = 1.52;
 	⚠ ここを上げると `.md` の**本文の字間も一緒に広がる**（行間を広げたときと同じ性質）。
 	   0 にすれば今までとまったく同じ見た目に戻る。
 */
-constexpr int MD_CHAR_SPACING = 2;
+//! 🔥 2px は「広がりすぎてキモい」と却下された（2026-09-07 本人）。1px で確定。
+constexpr int MD_CHAR_SPACING = 1;
 
 //! 拡張子が Markdown か
 inline bool IsMarkdownPath( const WCHAR* pszPath )
