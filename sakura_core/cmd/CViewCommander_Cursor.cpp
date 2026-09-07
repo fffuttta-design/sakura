@@ -404,7 +404,16 @@ void CViewCommander::Command_RIGHT( bool bSelect, bool bIgnoreCurrentSelection, 
 			// キャレットの移動先を決める。
 			if( nextline_exists
 				&& ( (on_x_max == MOVE_NEXTLINE_IMMEDIATELY && x_max <= to_x)
-					|| (on_x_max == MOVE_NEXTLINE_NEXTTIME && x_max < to_x)
+					// 🔥【自前改造】**行末に止まらずに次の行へ飛んでしまうのを防ぐ**（2026-09-07 本人指示）。
+					//    `MOVE_NEXTLINE_NEXTTIME` は「まず行末に止まり、次にもう1回押したら次の行へ」の意味。
+					//    ところが見出しの行は `#` と空白を幅ゼロで隠しているせいで、
+					//    最後の文字から右へ動かしたときの行き先（to_x）が**行末を通り越す**ため、
+					//    **行末に止まらずに次の行へ飛んで**いた。
+					//    その結果、→ では通れない位置が ← では存在し、本人には
+					//    「右から動かすとカーソルが1個ぶん余計に入る」ように見えていた
+					//    （実測ログ：見出しの行は px=148 に → で到達できないのに、← では止まる）。
+					//    ∴ **まだ行末に居ないなら飛ばない**（＝先に行末へ止まる）。本文の行の動きは変わらない。
+					|| (on_x_max == MOVE_NEXTLINE_NEXTTIME && x_max < to_x && x_max <= ptCaret.x)
 					|| (on_x_max == MOVE_NEXTLINE_NEXTTIME_AND_MOVE_RIGHT && x_max < to_x)
 				)
 			) {
