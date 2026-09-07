@@ -148,6 +148,37 @@ int CViewCommander::Command_DOWN( bool bSelect, bool bRepeat )
 	return nRepeat;
 }
 
+/*! カーソルが「見出しの見える文字の先頭」に居るか（【自前改造】2026-09-07）
+
+	🔥 **なぜ要るか。** 見出しの行は `#` と そのうしろの空白を「幅ゼロ」で隠してある。
+	   画面では文字が行頭から始まって見えるが、**論理的にはまだ2文字ぶん右に居る**。
+	   そのせいで、行頭で ← を押しても**前の行へ行かず、隠した記号の中へ1回入ってしまう**
+	   ＝ **← が1回空振りする**（2026-09-07 本人指摘「1個分だけカーソルが入る」。
+	   実測ログ：見出しの行は行頭から前の行へ出るのに ← が2回必要／本文の行は1回）。
+
+	∴ **見える文字の先頭に居るなら「行頭に居る」のと同じ扱いにする。**
+
+	⚠ 折り返した2行目以降には記号が無いので当たらない（論理位置で見ているため自然に外れる）。
+*/
+bool CViewCommander::IsCaretAtMdHeadingTextTop( void )
+{
+	if( !GetDocument()->IsMarkdownDocument() ){
+		return false;
+	}
+	const CLogicPoint ptCaret = GetCaret().GetCaretLogicPos();
+	const CDocLine* pcDocLine = GetDocument()->m_cDocLineMgr.GetLine( ptCaret.GetY2() );
+	if( nullptr == pcDocLine ){
+		return false;
+	}
+	CLogicInt nLen = CLogicInt(0);
+	const wchar_t* pLine = pcDocLine->GetDocLineStrWithEOL( &nLen );
+	int nTextStart = 0;
+	if( nullptr == pLine || !MdParseHeading( pLine, (int)nLen, nullptr, &nTextStart ) ){
+		return false;
+	}
+	return ( ptCaret.GetX2() <= CLogicInt(nTextStart) );
+}
+
 /*! @brief カーソル左移動
 
 	@date 2004.03.28 Moca EOFだけの行以降の途中にカーソルがあると落ちるバグ修正．
@@ -187,7 +218,13 @@ int CViewCommander::Command_LEFT( bool bSelect, bool bRepeat )
 		/* 現在行のデータを取得 */
 		const CLayout* pcLayout = GetDocument()->m_cLayoutMgr.SearchLineByLayoutY( ptCaretMove.GetY2() );
 		/* カーソルが左端にある */
-		if( ptCaretMove.GetX2() == (pcLayout ? pcLayout->GetIndent() : CLayoutInt(0))) {
+		// 🔥【自前改造】見出しの行は、隠している `# ` のぶん論理位置が右に居るので、
+		//    画面では行頭なのに「左端」と判定されず、← が1回空振りしていた。
+		//    ∴ **見える文字の先頭なら、行頭と同じ扱いにする**（詳しくは IsCaretAtMdHeadingTextTop）。
+		//    ⚠ キーリピートの2回目以降は ptCaretMove が先読みの値なので、1回目だけ見る。
+		const bool bMdAtHeadingTop = ( 0 == nRepCount ) && IsCaretAtMdHeadingTextTop();
+		if( bMdAtHeadingTop
+		 || ptCaretMove.GetX2() == (pcLayout ? pcLayout->GetIndent() : CLayoutInt(0))) {
 			if( 0 < ptCaretMove.GetY2()
 			   && ! m_pCommanderView->GetSelectionInfo().IsBoxSelecting()
 			) {
@@ -203,6 +240,18 @@ int CViewCommander::Command_LEFT( bool bSelect, bool bRepeat )
 					it.addDelta();
 				}
 				ptPos.x += it.getColumn() - it.getColumnDelta();
+
+				// 🔥【自前改造】**改行の中（CR と LF のあいだ）にカーソルを入れない**（2026-09-07 本人指示）。
+				//    見出しの行は隠している `# ` のぶん計算が1つ行き過ぎて、
+				//    下の行から ← で上がったときに**改行の内部で1回止まって**いた
+				//    （実測ログ：px=149 で2回止まる。行の本当の終わりは px=148）。
+				//    ∴ **その行の字がある所まで**で頭打ちにする。
+				if( pcLayout ){
+					const CLayoutInt nLineRight = pcLayout->CalcLayoutWidth( GetDocument()->m_cLayoutMgr );
+					if( nLineRight < ptPos.x ){
+						ptPos.x = nLineRight;
+					}
+				}
 				ptPos.y --;
 			} else {
 				if( 0 < nRepCount ){

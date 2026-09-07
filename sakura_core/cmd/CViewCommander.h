@@ -129,6 +129,7 @@ public:
 	void MdReplaceLogic( const CLogicRange& sRange, const std::wstring& strNew, int nCaretOffset );	/* 【自前改造】論理位置で書き換えてレイアウトを作り直す */
 	bool MdInsertBold( const wchar_t* pszText, int nTextLen );	/* 【自前改造】Ctrl+B のあとの字を太字の中に入れる */
 	bool MdSwallowMarkerSpace( const wchar_t* pszText, int nTextLen );	/* 【自前改造】見出し記号の中に空白が溜まるのを防ぐ */
+	bool IsCaretAtMdHeadingTextTop( void );	/* 【自前改造】カーソルが見出しの見える文字の先頭に居るか */
 	void Command_WordDeleteToStart( void );	/* 単語の左端まで削除 */
 	void Command_WordDeleteToEnd( void );	/* 単語の右端まで削除 */
 	void Command_WordCut( void );			/* 単語切り取り */
