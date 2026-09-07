@@ -215,12 +215,27 @@ INT_PTR CPropCommon::DoPropertySheet( int nPageNum, bool bTrayProc )
 	PROPSHEETPAGE		psp[std::size(ComPropSheetInfoList)];
 	for( nIdx = 0; nIdx < int(std::size(ComPropSheetInfoList)); nIdx++ ){
 		sTabname[nIdx] = LS(ComPropSheetInfoList[nIdx].m_nTabNameId);
+		if( sTabname[nIdx].empty() ){
+			// 🔥【自前改造】言語DLLに無い名前は、本体(exe)から取り直す。
+			//    ここを入れないと**タブの見出しだけ空っぽ**になり、幅ゼロで押せなくなる。
+			WCHAR szName[64] = { 0 };
+			if( 0 < ::LoadStringW( ::GetModuleHandle( nullptr ), ComPropSheetInfoList[nIdx].m_nTabNameId, szName, (int)std::size(szName) ) ){
+				sTabname[nIdx] = szName;
+			}
+		}
 
 		PROPSHEETPAGE *p = &psp[nIdx];
 		memset_raw( p, 0, sizeof_raw( *p ) );
 		p->dwSize      = sizeof_raw( *p );
 		p->dwFlags     = PSP_USETITLE | PSP_HASHELP;
-		p->hInstance   = CSelectLang::getLangRsrcInstance();
+		// 🔥【自前改造】この画面が言語DLLに無いときは、本体(exe)の画面を使う。
+		//    言語DLLは本家の物なので、こちらで足したページ（Markdown）は当然入っていない。
+		//    素通りさせると **共通設定そのものが開かなくなる**（英語表示に切り替わった瞬間に壊れる）。
+		HINSTANCE hRsrc = CSelectLang::getLangRsrcInstance();
+		if( nullptr == ::FindResource( hRsrc, MAKEINTRESOURCE( ComPropSheetInfoList[nIdx].resId ), RT_DIALOG ) ){
+			hRsrc = ::GetModuleHandle( nullptr );
+		}
+		p->hInstance   = hRsrc;
 		p->pszTemplate = MAKEINTRESOURCE( ComPropSheetInfoList[nIdx].resId );
 		p->pszIcon     = nullptr;
 		p->pfnDlgProc  = ComPropSheetInfoList[nIdx].DProc;
