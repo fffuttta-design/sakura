@@ -976,13 +976,29 @@ bool CViewCommander::DeleteBack_MdHeadingMarker( void )
 		return false;
 	}
 
+	// 🔥 **1回目は「記号のうしろの空白」だけ消す。見出しは残す。**（2026-09-07 本人指示）
+	//    以前は1回で記号ごと消していたので、`# 見出し` の空白を消したいだけなのに
+	//    見出しまで解けてしまっていた。空白はもう見出しの条件ではないので、
+	//    消えても `#見出し` のまま見出しで、**見た目は1ミリも変わらない**
+	//    （＝ファイルの中の無駄な1文字だけが減る）。
+	//    もう1回押せば `#` も消えて、ふつうの本文に戻る。
+	// ⚠ ただし**本文がまだ無い行**（`# ` だけ）で空白だけ消すと、残った `#` は
+	//    もう見出しではないので**画面に出てきてしまう**。そこは記号ごと消す。
+	int nSharpLen = 0;
+	while( nSharpLen < (int)nLen && L'#' == pLine[nSharpLen] ){
+		++nSharpLen;
+	}
+	const bool bHasBody = ( nTextStart < (int)nLen )
+	                   && ( L'\r' != pLine[nTextStart] ) && ( L'\n' != pLine[nTextStart] );
+	const int nDelBgn = ( nSharpLen < nTextStart && bHasBody ) ? nSharpLen : 0;
+
 	CLayoutMgr& cLayoutMgr = GetDocument()->m_cLayoutMgr;
 	const CLayoutInt nViewTopLine = m_pCommanderView->GetTextArea().GetViewTopLine();
 	const CLayoutInt nViewLeftCol = m_pCommanderView->GetTextArea().GetViewLeftCol();
 
 	// 行頭の記号だけを消す（論理位置で直に）
 	CLogicRange sDelRange;
-	sDelRange.SetFrom( CLogicPoint( CLogicInt(0), ptCaretLogic.GetY2() ) );
+	sDelRange.SetFrom( CLogicPoint( CLogicInt(nDelBgn), ptCaretLogic.GetY2() ) );
 	sDelRange.SetTo(   CLogicPoint( CLogicInt(nTextStart), ptCaretLogic.GetY2() ) );
 	m_pCommanderView->ReplaceData_CEditView2(
 		sDelRange,
@@ -1005,9 +1021,9 @@ bool CViewCommander::DeleteBack_MdHeadingMarker( void )
 	m_pCommanderView->GetTextArea().SetViewTopLine( nViewTopLine );
 	m_pCommanderView->GetTextArea().SetViewLeftCol( nViewLeftCol );
 
-	// カーソルは、いま本文だったところ（＝行頭）へ
+	// カーソルは、消したところの先頭へ（空白だけ消したときは `#` の直後＝本文の頭）
 	CLayoutPoint ptNew;
-	cLayoutMgr.LogicToLayout( CLogicPoint( CLogicInt(0), ptCaretLogic.GetY2() ), &ptNew );
+	cLayoutMgr.LogicToLayout( CLogicPoint( CLogicInt(nDelBgn), ptCaretLogic.GetY2() ), &ptNew );
 	GetCaret().MoveCursor( ptNew, true );
 	GetCaret().m_nCaretPosX_Prev = GetCaret().GetCaretLayoutPos().GetX2();
 
