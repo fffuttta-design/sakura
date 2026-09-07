@@ -25,6 +25,7 @@
 */
 
 #include "StdAfx.h"
+#include "util/markdown.h"	// 【自前改造】Markdown の既定値
 #include "env/CShareData.h"
 
 #include "env/DLLSHAREDATA.h"
@@ -284,6 +285,17 @@ bool CShareData::InitShareData()
 			sWindow.m_bDispNoteBar = TRUE;
 			sWindow.m_nNoteBarWidth = 210;
 			sWindow.m_szNoteBarFolder[0] = L'\0';
+
+			// 【自前改造】Markdown（.md）の見た目。意味と限界は util/markdown.h
+			{
+				CommonSetting_Markdown& md = m_pShareData->m_Common.m_sMarkdown;
+				for( int i = 0; i < 3; ++i ){ md.m_nHeadingScale[i] = MD_DEF_HEADING_SCALE[i]; }
+				md.m_nHeadingGap    = MD_DEF_HEADING_GAP;
+				md.m_nHeadingNarrow = MD_DEF_HEADING_NARROW;
+				md.m_nCharSpacing   = MD_DEF_CHAR_SPACING;
+				md.m_bHeadingBold   = TRUE;
+				::wcscpy_s( md.m_szHeadingFace, MD_DEF_HEADING_FACE );
+			}
 
 			sWindow.m_bSplitterWndHScroll = TRUE;	// 2001/06/20 asa-o 分割ウィンドウの水平スクロールの同期をとる
 			sWindow.m_bSplitterWndVScroll = TRUE;	// 2001/06/20 asa-o 分割ウィンドウの垂直スクロールの同期をとる

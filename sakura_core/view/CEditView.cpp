@@ -1129,6 +1129,34 @@ bool MdIsFontInstalled( const WCHAR* pszFace )
 	return bFound;
 }
 
+//! 【自前改造】Markdown の見た目の設定（共通設定＞Markdown ページ）
+/*!
+	🔥 **設定を読むのはここだけ。** 使うところが直接 GetDllShareData() を触ると、
+	   片方だけ古い値を見て「字は動いたのにカーソルは元の場所」になる。
+*/
+inline const CommonSetting_Markdown& MdCfg()
+{
+	return GetDllShareData().m_Common.m_sMarkdown;
+}
+
+//! 見出しの段（1〜3）の倍率。設定が壊れていても安全な値に丸める
+inline double MdHeadingScale( int nLevel )
+{
+	if( nLevel < 1 || 3 < nLevel ){
+		return 1.0;
+	}
+	int n = MdCfg().m_nHeadingScale[nLevel - 1];
+	if( n < 100 ){ n = 100; }		// 本文より小さくはしない
+	if( 300 < n ){ n = 300; }
+	return n / 100.0;
+}
+
+//! 行の高さの倍率。**見出し1より必ず高く**なるように自動で決める（markdown.h 参照）
+inline double MdLineHeightScale()
+{
+	return MdHeadingScale( 1 ) + ( MD_LINE_HEIGHT_MARGIN / 100.0 );
+}
+
 } // namespace
 
 /*! 見出しの段ごとの文字の高さ（【自前改造】）
@@ -1146,7 +1174,7 @@ int CEditView::CalcHeadingHeight( int nLevel ) const
 	if( nCharH <= 0 ){
 		return 0;
 	}
-	int nHeight = (int)( nCharH * MD_HEADING_SCALE[nLevel - 1] );
+	int nHeight = (int)( nCharH * MdHeadingScale( nLevel ) );
 	if( nHeight < nCharH ){
 		nHeight = nCharH;		// 本文より小さくはしない
 	}
@@ -1191,7 +1219,7 @@ int CEditView::GetHeadingLevelAtCaret() const
 	   ∴ 字を上へずらして、**下に空きを作る**。上へ出たぶんは1つ上の行の
 	   「字の下の空き」（升目の高さ − 本文の字の高さ）に収める。
 
-	   ずらす量 ＝「下にこれだけ空けたい（MD_HEADING_GAP_SCALE）」から逆算する。
+	   ずらす量 ＝「下にこれだけ空けたい（設定の m_nHeadingGap ％）」から逆算する。
 	   段が小さい見出しは元から下に空きがあるので、そのぶんずらす量は少なくなる（0 のこともある）。
 
 	⚠ 上の行の字に触れないよう、頭打ちを必ず入れること（触れると字が重なる）。
@@ -1207,7 +1235,7 @@ int CEditView::CalcHeadingLift( int nLevel ) const
 	if( nCharH <= 0 || nLineH <= 0 ){
 		return 0;
 	}
-	int nGap = (int)( nCharH * MD_HEADING_GAP_SCALE );
+	int nGap = (int)( nCharH * ( MdCfg().m_nHeadingGap / 100.0 ) );
 	if( nGap < 1 ){
 		nGap = 1;
 	}
@@ -1262,19 +1290,21 @@ bool CEditView::MakeHeadingLogfont( int nLevel, LOGFONT* pOut ) const
 	}
 	// 見出しの書体。入っていなければ本文と同じ書体で我慢する
 	// （毎回数えなくてよいので、一度調べたら覚えておく）
-	static const bool bHasHeadFace = MdIsFontInstalled( MD_HEADING_FACE );
+	// 🔥 設定で書体を変えられるので「一度調べて覚える」はできない（覚えると変更が効かない）
+	const WCHAR* pszFace = MdCfg().m_szHeadingFace;
+	const bool bHasHeadFace = ( L'\0' != pszFace[0] ) && MdIsFontInstalled( pszFace );
 
 	LOGFONT lfHead = GetFontset().GetLogfont();
 	if( bHasHeadFace ){
-		::wcscpy_s( lfHead.lfFaceName, MD_HEADING_FACE );
+		::wcscpy_s( lfHead.lfFaceName, pszFace );
 	}
 	lfHead.lfHeight = -nHeight;	// 負＝文字そのものの高さ
 	// 🔥 lfWidth は升目の半角幅を基準にする（横にはみ出させない）。
 	//    0（おまかせ）にすると背が高いぶん横にも太り、**漢字が隣と重なって読めない**。
-	// 🔥 そこから MD_HEADING_NARROW だけ細くする＝**見出しだけ字間が空く**。
+	// 🔥 そこから設定の m_nHeadingNarrow だけ細くする＝**見出しだけ字間が空く**。
 	//    文字の置き場所は本文フォントの幅から作られていて見出しフォントでは変わらないので、
 	//    細くしてもカーソル・クリック位置は1ミリも動かない（詳しくは markdown.h）。
-	lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth() - MD_HEADING_NARROW;
+	lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth() - MdCfg().m_nHeadingNarrow;
 	if( lfHead.lfWidth < 1 ){
 		lfHead.lfWidth = 1;
 	}
@@ -1285,8 +1315,8 @@ bool CEditView::MakeHeadingLogfont( int nLevel, LOGFONT* pOut ) const
 	// 🔥 太字にする（本人指示 2026-09-01・ふたMEMO に合わせる）。
 	//    ⚠ **書体を選ばずに太字にすると潰れる。** ＭＳ ゴシックは
 	//    1.20倍以上だと太字の指定がそもそも効かず、効く大きさでは漢字が潰れた。
-	//    書体の選定理由は util/markdown.h の MD_HEADING_FACE を見ること。
-	lfHead.lfWeight = FW_BOLD;
+	//    書体の選定理由は util/markdown.h の MD_DEF_HEADING_FACE を見ること。
+	lfHead.lfWeight = MdCfg().m_bHeadingBold ? FW_BOLD : FW_NORMAL;
 	*pOut = lfHead;
 	return true;
 }
@@ -1337,7 +1367,7 @@ void CEditView::SetFont()
 			// いちばん大きい見出しが収まるだけの高さを作る（本文の文字の高さから逆算）
 			const int nCharH = GetTextMetrics().GetHankakuHeight();
 			if( 0 < nCharH ){
-				const int nNeed = (int)( nCharH * MD_LINE_HEIGHT_SCALE ) - nCharH;
+				const int nNeed = (int)( nCharH * MdLineHeightScale() ) - nCharH;
 				if( nLineSpace < nNeed ){
 					nLineSpace = nNeed;
 				}
@@ -1348,7 +1378,7 @@ void CEditView::SetFont()
 		//       片方だけ広げると、文字は動くのにカーソルが元の場所に残る。
 		int nColmSpace = m_pTypeData->m_nColumnSpace;
 		if( !m_bMiniMap && IsMarkdownDocument() ){
-			nColmSpace += MD_CHAR_SPACING;
+			nColmSpace += MdCfg().m_nCharSpacing;
 		}
 		GetTextMetrics().Update(hdc, GetFontset().GetFontHan(), DpiScaleY(nLineSpace), DpiScaleX(nColmSpace));
 	}

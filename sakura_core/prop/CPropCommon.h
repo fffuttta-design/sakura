@@ -54,6 +54,7 @@ enum PropComSheetOrder {
 	ID_PROPCOM_PAGENUM_HELPER,			//!< 支援
 	ID_PROPCOM_PAGENUM_MACRO,			//!< マクロ
 	ID_PROPCOM_PAGENUM_PLUGIN,			//!< プラグイン
+	ID_PROPCOM_PAGENUM_MARKDOWN,		//!< 【自前改造】Markdown
 	ID_PROPCOM_PAGENUM_MAX,
 };
 /*-----------------------------------------------------------------------
@@ -468,6 +469,21 @@ private:
 //==============================================================
 //!	ステータスバーページ
 class CPropStatusbar final : CPropCommon
+{
+public:
+	//!	Dialog Procedure
+	static INT_PTR CALLBACK DlgProc_page(
+		HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam );
+protected:
+	//! Message Handler
+	INT_PTR DispatchEvent(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	void SetData(HWND hwndDlg);	//!< ダイアログデータの設定
+	int  GetData(HWND hwndDlg);	//!< ダイアログデータの取得
+};
+
+//==============================================================
+//!	【自前改造】Markdown ページ
+class CPropMarkdown final : CPropCommon
 {
 public:
 	//!	Dialog Procedure

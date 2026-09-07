@@ -700,6 +700,24 @@ struct CommonSetting_MainMenu
 };
 
 // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
+//                    Markdown（自前改造）                     //
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
+//! 【自前改造】`.md` を開いたときの見た目
+/*!
+	🔥 **数値の意味と限界は `util/markdown.h` に書いてある。** ここは入れ物だけ。
+	   既定値は `MD_DEF_*`（同ファイル）。設定画面は「Markdown」ページ（CPropComMarkdown.cpp）。
+*/
+struct CommonSetting_Markdown
+{
+	int		m_nHeadingScale[3];				//!< 見出し1〜3の大きさ（本文の文字の高さに対する%）
+	int		m_nHeadingGap;					//!< 見出しの下に空ける余白（同上・%）
+	int		m_nHeadingNarrow;				//!< 見出しの字と字のあいだ（px・半角1文字あたり）
+	int		m_nCharSpacing;					//!< 文書ぜんぶの字間（px・半角1文字あたり）
+	BOOL	m_bHeadingBold;					//!< 見出しを太字にする
+	WCHAR	m_szHeadingFace[LF_FACESIZE];	//!< 見出しの書体（空なら本文と同じ書体）
+};
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- //
 //                                                             //
 //                          まとめ                             //
 //                                                             //
@@ -733,5 +751,7 @@ struct CommonSetting
 	CommonSetting_Statusbar			m_sStatusbar;		//!< ステータスバー		// 2008/6/21 Uchi
 	CommonSetting_Plugin			m_sPlugin;			//!< プラグイン 2009/11/30 syat
 	CommonSetting_MainMenu			m_sMainMenu;		//!< メインメニュー		// 2010/5/15 Uchi
+	//
+	CommonSetting_Markdown			m_sMarkdown;		//!< 【自前改造】Markdown の見た目
 };
 #endif /* SAKURA_COMMONSETTING_2CBDBC26_EA7F_466E_842F_AFB0D93207D2_H_ */

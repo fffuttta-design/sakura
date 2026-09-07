@@ -149,7 +149,7 @@ void CLayoutMgr::SetLayoutInfo(
 	// 【自前改造】.md のときは文字と文字の隙間を少し広げる（見出しの窮屈さ対策）。
 	//   🔥 レイアウト側（ここ）と描画側（CEditView::SetFont の CTextMetrics::Update）で
 	//      **必ず同じ値**にすること。片方だけ広げると文字とカーソルがずれる。
-	m_nSpacing = DpiScaleX(refType.m_nColumnSpace + ( m_bMdHeadingHide ? MD_CHAR_SPACING : 0 ));
+	m_nSpacing = DpiScaleX(refType.m_nColumnSpace + ( m_bMdHeadingHide ? GetDllShareData().m_Common.m_sMarkdown.m_nCharSpacing : 0 ));
 	if( nCharLayoutXPerKeta == -1 )
 	{
 		// Viewが持ってるフォント情報は古い、しょうがないので自分で作る

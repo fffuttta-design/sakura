@@ -1829,6 +1829,7 @@
       <Filter>Cpp Source Files\prop</Filter>
     </ClCompile>
     <ClCompile Include="..\sakura_core\prop\CPropComMainMenu.cpp">
+    <ClCompile Include="..\sakura_core\prop\CPropComMarkdown.cpp">
       <Filter>Cpp Source Files\prop</Filter>
     </ClCompile>
     <ClCompile Include="..\sakura_core\prop\CPropCommon.cpp">

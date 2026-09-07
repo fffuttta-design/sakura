@@ -47,6 +47,12 @@ bool CPropertyManager::OpenPropertySheet( HWND hWnd, int nPageNum, bool bTrayPro
 		// 2007.06.20 ryoji グループ化に変更があったときはグループIDをリセットする
 		BOOL bGroup = (GetDllShareData().m_Common.m_sTabBar.m_bDispTabWnd && !GetDllShareData().m_Common.m_sTabBar.m_bDispTabWndMultiWin);
 
+		// 🔥【自前改造】Markdown の見た目は「フォントと桁の幅」が変わる設定。
+		//    PM_CHANGESETTING_ALL だけだとレイアウトを組み直さないので、
+		//    **字は新しい大きさなのに折り返しとカーソルは古いまま**になる。
+		//    ∴ 変わったときだけ、あとで PM_CHANGESETTING_FONT も送る。
+		const CommonSetting_Markdown mdBefore = GetDllShareData().m_Common.m_sMarkdown;
+
 		// 印刷中にキーワードを上書きしないように
 		CShareDataLockCounter* pLock = nullptr;
 		CShareDataLockCounter::WaitLock( pcPropCommon->m_hwndParent, &pLock );
@@ -71,6 +77,16 @@ bool CPropertyManager::OpenPropertySheet( HWND hWnd, int nPageNum, bool bTrayPro
 			(LPARAM)PM_CHANGESETTING_ALL,
 			hWnd
 		);
+
+		// 【自前改造】Markdown の見た目が変わったなら、レイアウトから組み直させる
+		if( 0 != memcmp( &mdBefore, &GetDllShareData().m_Common.m_sMarkdown, sizeof(CommonSetting_Markdown) ) ){
+			CAppNodeGroupHandle(0).SendMessageToAllEditors(
+				MYWM_CHANGESETTING,
+				(WPARAM)0,
+				(LPARAM)PM_CHANGESETTING_FONT,
+				nullptr	// 🔥 自分の窓にも届かせる（除外すると設定した窓だけ古いまま）
+			);
+		}
 
 		delete pLock;
 		bRet = true;

@@ -602,6 +602,16 @@ void CShareData_IO::ShareData_IO_Common( CDataProfile& cProfile )
 	cProfile.IOProfileData( pszSecName, L"szNoteBarFolder"		, StringBufferW( common.m_sWindow.m_szNoteBarFolder ) );
 	cProfile.IOProfileData( pszSecName, L"bDarkMode"				, common.m_sWindow.m_bDarkMode );
 
+	// 【自前改造】Markdown（.md）の見た目。意味と限界は util/markdown.h
+	cProfile.IOProfileData( pszSecName, L"nMdHeadingScale1"	, common.m_sMarkdown.m_nHeadingScale[0] );
+	cProfile.IOProfileData( pszSecName, L"nMdHeadingScale2"	, common.m_sMarkdown.m_nHeadingScale[1] );
+	cProfile.IOProfileData( pszSecName, L"nMdHeadingScale3"	, common.m_sMarkdown.m_nHeadingScale[2] );
+	cProfile.IOProfileData( pszSecName, L"nMdHeadingGap"		, common.m_sMarkdown.m_nHeadingGap );
+	cProfile.IOProfileData( pszSecName, L"nMdHeadingNarrow"	, common.m_sMarkdown.m_nHeadingNarrow );
+	cProfile.IOProfileData( pszSecName, L"nMdCharSpacing"	, common.m_sMarkdown.m_nCharSpacing );
+	cProfile.IOProfileData( pszSecName, L"bMdHeadingBold"	, common.m_sMarkdown.m_bHeadingBold );
+	cProfile.IOProfileData( pszSecName, L"szMdHeadingFace"	, StringBufferW( common.m_sMarkdown.m_szHeadingFace ) );
+
 	cProfile.IOProfileData( pszSecName, L"bDispTabWnd"			, common.m_sTabBar.m_bDispTabWnd );	//タブウインドウ	//@@@ 2003.05.31 MIK
 	cProfile.IOProfileData( pszSecName, L"bDispTabWndMultiWin"	, common.m_sTabBar.m_bDispTabWndMultiWin );	//タブウインドウ	//@@@ 2003.05.31 MIK
 	cProfile.IOProfileData(pszSecName, L"szTabWndCaption", StringBufferW(common.m_sTabBar.m_szTabWndCaption));	//@@@ 2003.06.13 MIK

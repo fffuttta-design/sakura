@@ -826,6 +826,7 @@
 #define IDD_PROP_MACRO                  5215
 #define IDD_PROP_PLUGIN                 5216
 #define IDD_PROP_MAINMENU               5217
+#define IDD_PROP_MARKDOWN               5218
 #define IDD_WINPOSSIZE                  5220
 #define IDD_PLUGIN_OPTION               5221
 #define IDD_PROFILEMGR                  5222
@@ -1570,6 +1571,7 @@
 #define STR_PREVIEW_ONLY                34759
 #define STR_NOT_SAVED                   34760
 #define STR_PROPCOMMON_PLUGIN           34761
+#define STR_PROPCOMMON_MARKDOWN         35057
 #define STR_PROPCOMMON_MAINMENU         34762
 #define STR_PROPCOMMON_STATBAR          34763
 #define STR_SPECIAL_FUNC                34764
@@ -1863,11 +1865,22 @@
 
 // Next default values for new objects
 // 
+// 【自前改造】共通設定＞Markdown ページ
+#define IDC_EDIT_MD_H1                  1742
+#define IDC_EDIT_MD_H2                  1743
+#define IDC_EDIT_MD_H3                  1744
+#define IDC_EDIT_MD_GAP                 1745
+#define IDC_EDIT_MD_NARROW              1746
+#define IDC_EDIT_MD_SPACING             1747
+#define IDC_EDIT_MD_FACE                1748
+#define IDC_CHECK_MD_BOLD               1749
+#define IDC_BUTTON_MD_DEFAULT           1750
+
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        35057
+#define _APS_NEXT_RESOURCE_VALUE        35058
 #define _APS_NEXT_COMMAND_VALUE         101
-#define _APS_NEXT_CONTROL_VALUE         1741
+#define _APS_NEXT_CONTROL_VALUE         1751
 #define _APS_NEXT_SYMED_VALUE           10000
 #endif
 #endif

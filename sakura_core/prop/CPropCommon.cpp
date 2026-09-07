@@ -208,6 +208,7 @@ INT_PTR CPropCommon::DoPropertySheet( int nPageNum, bool bTrayProc )
 		{ STR_PROPCOMMON_SUPPORT,	IDD_PROP_HELPER,	CPropHelper::DlgProc_page },
 		{ STR_PROPCOMMON_MACRO,		IDD_PROP_MACRO,		CPropMacro::DlgProc_page },
 		{ STR_PROPCOMMON_PLUGIN,	IDD_PROP_PLUGIN,	CPropPlugin::DlgProc_page },
+		{ STR_PROPCOMMON_MARKDOWN,	IDD_PROP_MARKDOWN,	CPropMarkdown::DlgProc_page },	// 【自前改造】
 	};
 
 	std::wstring		sTabname[std::size(ComPropSheetInfoList)];
