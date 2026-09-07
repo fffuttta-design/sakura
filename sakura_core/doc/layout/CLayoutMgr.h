@@ -158,7 +158,11 @@ public:
 	CKetaXInt  GetActualTabSpaceKetas(CKetaXInt pos) const { return GetTabSpaceKetas() - pos % GetTabSpaceKetas(); }
 
 	CMemoryIterator CreateCMemoryIterator(const CLayout* pcLayout) const {
-		return CMemoryIterator(pcLayout, this->GetTabSpace(), this->m_tsvInfo, this->GetWidthPerKeta(), this->GetCharSpacing());
+		CMemoryIterator it(pcLayout, this->GetTabSpace(), this->m_tsvInfo, this->GetWidthPerKeta(), this->GetCharSpacing());
+		// 【自前改造】隠している文字を幅ゼロとして数える（GetLayoutXOfChar と同じ扱いにそろえる）
+		it.setMdHide( m_bMdHeadingHide );
+		it.first();
+		return it;
 	}
 
 	/*! 次のTABまたはカンマ位置までの幅

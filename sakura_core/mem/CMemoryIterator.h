@@ -25,6 +25,7 @@
 #include "doc/logic/CDocLine.h"
 #include "env/DLLSHAREDATA.h"
 #include "mem/CNativeW.h"
+#include "util/markdown.h"	// 【自前改造】隠している文字の範囲（MdHiddenEndAt）
 
 /*-----------------------------------------------------------------------
 クラスの宣言
@@ -110,6 +111,14 @@ public:
 			if( m_nSpacing ){
 				m_nColumn_Delta += CLayoutXInt(CNativeW::GetKetaOfChar(m_pLine, m_nLineLen, m_nIndex) * m_nSpacing);
 			}
+			// 🔥【自前改造】隠している文字（見出しの記号・リンク・太字）は幅ゼロ。
+			//    カーソル移動はこの走査で桁を数えるので、ここが抜けていると
+			//    レイアウトの桁と食い違い、隠している所を跨いだあとカーソルが
+			//    文字の途中へ飛んで押し戻される（＝押しても動かない回ができる）。
+			//    ⚠ CLayoutMgr::GetLayoutXOfChar と**必ず同じ判定**にすること。
+			if( m_bMdHide && m_nIndex < CLogicInt( MdHiddenEndAt( m_pLine, (Int)m_nLineLen, (Int)m_nIndex ) ) ){
+				m_nColumn_Delta = CLayoutXInt(0);
+			}
 		}
 	}
 	
@@ -121,6 +130,8 @@ public:
 		m_nIndex += m_nIndex_Delta;
 	}	//	ポインタをずらす
 	
+	//! 【自前改造】隠している文字を幅ゼロとして数える（CLayoutMgr が設定する）
+	void setMdHide( bool b ){ m_bMdHide = b; }
 	CLogicInt	getIndex()			const {	return m_nIndex;	}
 	CLayoutInt	getColumn()			const {	return m_nColumn;	}
 	CLogicInt	getIndexDelta()		const {	return m_nIndex_Delta;	}
@@ -143,6 +154,7 @@ private:
 	const CPixelXInt	m_nSpacing;		//文字隙間(px)
 	const CPixelXInt	m_nTabPadding;	//タブ幅最少値-1
 	const CPixelXInt	m_nTabSpaceDx;	//タブ幅計算用(m_nTabSpace + m_nTabPadding - 1)
+	bool				m_bMdHide = false;	//!< 【自前改造】隠している文字を幅ゼロとして数えるか
 
 	//状態変数
 	CLogicInt	m_nIndex;        //データ位置。文字単位。
