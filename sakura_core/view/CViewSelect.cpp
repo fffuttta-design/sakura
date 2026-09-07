@@ -507,13 +507,21 @@ void CViewSelect::DrawSelectAreaLine(
 			it.scanNext();
 			if ( it.getIndex() + it.getIndexDelta() > pcLayout->GetLengthWithoutEOL() ){
 				// HACK:改行コードは選択だけ1桁幅
+				// 🔥【自前改造】**改行記号を出していないときは、選択も1ドットも広げない**
+				//    （2026-09-07 本人指示）。
+				//    本家は改行記号が非表示でも 2px だけ色を付けていた。本人にはこれが
+				//    **「改行という開発側の都合が、触れる空白として画面に出ている」**ように映る。
+				//    「開発コードはユーザーに視認も操作もさせないのが普通」というのが本人の考え。
+				//    ∴ 記号を出していないなら、色も付けない。
+				//    ⚠ 選んでいる中身は変えていない（コピーすれば改行はちゃんと付いてくる）。
+				//       変えたのは**色を塗る範囲だけ**。
+				//    ⚠ 改行記号を「表示する」設定にしたときは本家のまま
+				//      （記号が見えているのに色が付かないほうが不自然なため）。
 				if( CTypeSupport(pView, COLORIDX_EOL).IsDisp() ){
 					nPosX += pView->GetTextMetrics().GetLayoutXDefault();
 					if( pcLayout->GetLayoutEol().GetLen() != 0 ){
 						nPosX += 4; // 4pxはCRLFのはみ出てる分
 					}
-				}else{
-					nPosX += 2; // 非表示なら()2px
 				}
 				break;
 			}

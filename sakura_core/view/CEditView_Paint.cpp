@@ -1246,6 +1246,27 @@ bool CEditView::DrawLayoutLine(SColorStrategyInfo* pInfo)
 		if( GetSelectionInfo().IsTextSelected() && cSelectType.IsDisp() ){
 			// 選択範囲の指定色：必要ならテキストのない部分の矩形選択を作画
 			CLayoutRange selectArea = GetSelectionInfo().GetSelectAreaLine(pInfo->m_pDispPos->GetLayoutLineRef(), pcLayout);
+
+			// 🔥【自前改造】行末の「改行のぶん」に色を付けない（2026-09-07 本人指示）
+			//
+			//    本家は、行をまるごと選ぶと**文字の右に1マスぶん色が付く**。
+			//    これは「改行も選んだ」という印だが、本人には
+			//    **改行という開発側の都合が、触れる空白として見えている**ように映る。
+			//    「開発コードはユーザーに視認も操作もさせないのが普通」というのが本人の考え。
+			//    ∴ 塗るのは**実際に字がある所まで**にする。
+			//
+			//    ⚠ 選んでいる中身は変えていない（コピーすれば改行はちゃんと付いてくる）。
+			//       変えたのは**色を塗る範囲だけ**。
+			//    ⚠ **矩形選択のときは触らない。** あちらは「字が無い所を塗る」のが仕事なので、
+			//       ここを詰めると矩形選択が成立しなくなる。
+			if( !GetSelectionInfo().IsBoxSelecting() && nullptr != pcLayout
+			 && !CTypeSupport(this, COLORIDX_EOL).IsDisp() ){
+				const CLayoutInt nTextRight = pcLayout->CalcLayoutWidth( m_pcEditDoc->m_cLayoutMgr );
+				if( nTextRight < selectArea.GetTo().x ){
+					selectArea.SetToX( nTextRight );
+				}
+			}
+
 			// 2010.10.04 スクロール分の足し忘れ
 			CPixelXInt nSelectFromPx =  GetTextMetrics().GetCharPxWidth(selectArea.GetFrom().x - GetTextArea().GetViewLeftCol());
 			CPixelXInt nSelectToPx   = GetTextMetrics().GetCharPxWidth(selectArea.GetTo().x - GetTextArea().GetViewLeftCol());
