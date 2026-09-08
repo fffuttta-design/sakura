@@ -7,6 +7,7 @@
 */
 
 #include "StdAfx.h"
+#include "util/markdown.h"	// 【自前改造】見出しの幅（MdWidenColumns）
 #include "view/CEditView.h" // SColorStrategyInfo
 #include "view/CViewFont.h"
 #include "CFigureStrategy.h"
@@ -55,7 +56,17 @@ int CFigure_Text::FowardChars(SColorStrategyInfo* pInfo)
 						nIdx
 					);
 	pInfo->m_nPosInLogic += nLength;
-	return pInfo->m_pcView->GetTextMetrics().CalcTextWidth3(pInfo->m_pLineOfLogic + nIdx, nLength);
+	int nWidth = pInfo->m_pcView->GetTextMetrics().CalcTextWidth3(pInfo->m_pLineOfLogic + nIdx, nLength);
+	// 🔥【自前改造】見出しの行は升目を多く使う。描かずに読み飛ばすときも同じだけ進める
+	//    （ここを忘れると、横に流したときだけ字と桁がずれる）。
+	const int nMdLevel = pInfo->m_pcView->GetDrawingHeadingLevel();
+	if( nMdLevel ){
+		const int nBasis = pInfo->m_pcView->GetTextMetrics().GetHankakuDx();
+		if( 0 < nBasis && 0 == nWidth % nBasis ){
+			nWidth = MdWidenColumns( nWidth / nBasis, nMdLevel ) * nBasis;
+		}
+	}
+	return nWidth;
 }
 
 bool CFigure_Text::DrawImpBlock(SColorStrategyInfo* pInfo, int nPos, int nLength)

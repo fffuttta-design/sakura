@@ -7,6 +7,7 @@
 */
 
 #include "StdAfx.h"
+#include "util/markdown.h"	// 【自前改造】見出しの幅（MdWidenColumns）
 #include "CTextDrawer.h"
 #include <vector>
 #include "CTextMetrics.h"
@@ -45,6 +46,23 @@ void CTextDrawer::DispText( HDC hdc, DispPos* pDispPos, int marginy, const wchar
 	//文字間隔配列を生成
 	static std::vector<int> vDxArray(1);
 	const int* pDxArray = pMetrics->GenerateDxArray2(&vDxArray, pData, nLength);
+
+	// 🔥【自前改造】見出しの行は、1字が使う升目を増やして横にも大きくする。
+	//    ⚠ 桁を数える側（CMemoryIterator / GetLayoutXOfChar）と**必ず同じ計算**にすること。
+	//       片方だけ広げると、字は動くのにカーソルが元の場所に残る。
+	const int nMdLevel = m_pEditView->GetDrawingHeadingLevel();
+	if( nMdLevel && pDxArray ){
+		const int nBasis = pMetrics->GetHankakuDx();
+		if( 0 < nBasis ){
+			vDxArray.assign( pDxArray, pDxArray + nLength );
+			for( int i = 0; i < nLength; ++i ){
+				if( 0 == vDxArray[i] % nBasis ){	// TAB など升目の倍数でないものは触らない
+					vDxArray[i] = MdWidenColumns( vDxArray[i] / nBasis, nMdLevel ) * nBasis;
+				}
+			}
+			pDxArray = vDxArray.data();
+		}
+	}
 
 	//文字列のピクセル幅
 	int nTextWidth=pMetrics->CalcTextWidth(pData,nLength,pDxArray);

@@ -129,6 +129,11 @@ public:
 	//! 【自前改造】いま描いている行の「上へのずらし量」（描画中だけ意味がある）
 	//   🔥 文字を描く側（CTextDrawer::DispText）が見る。行を描き始めるときに入れ、描き終えたら 0 に戻す。
 	int GetDrawingHeadingLift() const { return m_nMdHeadingLift; }
+	//! 【自前改造】いま描いている行の見出しの段（1〜3・見出しでなければ0）
+	/*! 🔥 桁の幅を広げるのに使う。**色を決めるときに必ず入れ直すこと**
+	    （入れ忘れると、字は広いのに桁は狭いまま＝カーソルがずれる）。 */
+	int GetDrawingHeadingLevel() const { return m_nMdHeadingLevel; }
+	void SetDrawingHeadingLevel( int n ){ m_nMdHeadingLevel = n; }
 	void SetDrawingHeadingLift( int n ){ m_nMdHeadingLift = n; }
 	//! 【自前改造】日本語入力の変換中（未確定の文字が出ている最中）か
 	//   🔥 変換中は**自前のカーソル（縦棒）を出さない**。未確定文字を描いているのは IME 自身で、
@@ -152,6 +157,7 @@ private:
 	bool IsMarkdownDocument() const;
 	void DeleteHeadingFonts();
 	HFONT m_hFontHeading[3] = { nullptr, nullptr, nullptr };
+	int m_nMdHeadingLevel = 0;	//!< 【自前改造】いま描いている行の見出しの段
 	//! 【自前改造】いまIMEに渡してある字の段（0＝本文／-1＝まだ渡していない）
 	//   カーソルが動くたびにIMEを触らないための覚え書き
 	int m_nImeFontLevel = -1;

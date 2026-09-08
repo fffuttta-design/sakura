@@ -40,6 +40,8 @@ public:
 	CMemoryIterator( const CDocLine* pcT, CLayoutInt nTabSpace, const CTsvModeInfo& tsvInfo, CPixelXInt nCharDx, CPixelXInt nSpacing )
 	: m_pLine( pcT ? pcT->GetPtr() : nullptr )
 	, m_nLineLen( pcT ? pcT->GetLengthWithEOL() : 0 )
+	, m_pLogic( pcT ? pcT->GetPtr() : nullptr )		// 【自前改造】見出し判定は論理行の先頭で
+	, m_nLogicLen( pcT ? (int)(Int)pcT->GetLengthWithEOL() : 0 )
 	, m_nTabSpace( nTabSpace )
 	, m_tsvInfo( tsvInfo )
 	, m_nIndent( CLayoutInt(0) )
@@ -54,6 +56,8 @@ public:
 	CMemoryIterator( const CLayout* pcT, CLayoutInt nTabSpace, const CTsvModeInfo& tsvInfo, CPixelXInt nCharDx, CPixelXInt nSpacing )
 	: m_pLine( pcT ? pcT->GetPtr() : nullptr )
 	, m_nLineLen( pcT ? pcT->GetLengthWithEOL() : 0 )
+	, m_pLogic( ( pcT && pcT->GetDocLineRef() ) ? pcT->GetDocLineRef()->GetPtr() : nullptr )
+	, m_nLogicLen( ( pcT && pcT->GetDocLineRef() ) ? (int)(Int)pcT->GetDocLineRef()->GetLengthWithEOL() : 0 )
 	, m_nTabSpace( nTabSpace )
 	, m_tsvInfo( tsvInfo )
 	, m_nIndent( pcT ? pcT->GetIndent() : CLayoutInt(0) )
@@ -119,6 +123,11 @@ public:
 			if( m_bMdHide && m_nIndex < CLogicInt( MdHiddenEndAt( m_pLine, (Int)m_nLineLen, (Int)m_nIndex ) ) ){
 				m_nColumn_Delta = CLayoutXInt(0);
 			}
+			// 🔥【自前改造】見出しの行は横にも広げる（隠している文字は 0 のままになる）。
+			//    ⚠ 広げる計算は MdWidenColumns 1本に集約。ここで独自に書かない。
+			if( m_nMdLevel ){
+				m_nColumn_Delta = CLayoutXInt( MdWidenColumns( (Int)m_nColumn_Delta, m_nMdLevel ) );
+			}
 		}
 	}
 	
@@ -131,7 +140,13 @@ public:
 	}	//	ポインタをずらす
 	
 	//! 【自前改造】隠している文字を幅ゼロとして数える（CLayoutMgr が設定する）
-	void setMdHide( bool b ){ m_bMdHide = b; }
+	void setMdHide( bool b )
+	{
+		m_bMdHide = b;
+		// 🔥【自前改造】見出しの行は1字が升目を多く使う（背だけでなく横も大きくするため）。
+		//    判定は**論理行の先頭**で行う。折り返した2行目以降も同じ幅で数えないと桁がずれる。
+		m_nMdLevel = b ? MdHeadingLevelOf( m_pLogic, m_nLogicLen ) : 0;
+	}
 	CLogicInt	getIndex()			const {	return m_nIndex;	}
 	CLayoutInt	getColumn()			const {	return m_nColumn;	}
 	CLogicInt	getIndexDelta()		const {	return m_nIndex_Delta;	}
@@ -155,6 +170,9 @@ private:
 	const CPixelXInt	m_nTabPadding;	//タブ幅最少値-1
 	const CPixelXInt	m_nTabSpaceDx;	//タブ幅計算用(m_nTabSpace + m_nTabPadding - 1)
 	bool				m_bMdHide = false;	//!< 【自前改造】隠している文字を幅ゼロとして数えるか
+	const wchar_t*	m_pLogic = nullptr;	//!< 【自前改造】論理行の先頭（見出し判定用）
+	int				m_nLogicLen = 0;		//!< 【自前改造】論理行の長さ
+	int				m_nMdLevel = 0;			//!< 【自前改造】この行が見出しなら段（1〜3）
 
 	//状態変数
 	CLogicInt	m_nIndex;        //データ位置。文字単位。

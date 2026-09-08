@@ -286,12 +286,20 @@ public:
 		   幅ゼロの文字は異体字セレクタで元からある形なので、変換や折り返しは今までどおり動く。
 	*/
 	CLayoutXInt GetLayoutXOfChar( const wchar_t* pData, int nDataLen, int i ) const {
+		int nMdLevel = 0;
 		if( m_bMdHeadingHide && 0 < nDataLen ){
 			if( i < MdHiddenEndAt( pData, nDataLen, i ) ){
 				return CLayoutXInt(0);
 			}
+			// 🔥【自前改造】見出しの行は1字が升目を多く使う（横も一緒に大きくするため）。
+			//    ⚠ CMemoryIterator::scanNext と**必ず同じ扱い**にすること。
+			nMdLevel = MdHeadingLevelOf( pData, nDataLen );
 		}
-		return GetLayoutXOfCharRaw( pData, nDataLen, i );
+		const CLayoutXInt nRaw = GetLayoutXOfCharRaw( pData, nDataLen, i );
+		if( nMdLevel ){
+			return CLayoutXInt( MdWidenColumns( (Int)nRaw, nMdLevel ) );
+		}
+		return nRaw;
 	}
 	//! 1文字ぶんのレイアウト幅（Markdown の見出し記号を考えない素の幅）
 	CLayoutXInt GetLayoutXOfCharRaw( const wchar_t* pData, int nDataLen, int i ) const {

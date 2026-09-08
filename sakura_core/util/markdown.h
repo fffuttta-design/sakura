@@ -41,7 +41,7 @@
 //!
 //! 🔥 **ここは「初回の既定値」**。実際に使う値は設定画面（共通設定＞Markdown）から変わる。
 //!    ＝ `GetDllShareData().m_Common.m_sMarkdown.m_nHeadingScale[]`（%）。
-constexpr int MD_DEF_HEADING_SCALE[3] = { 145, 128, 118 };
+constexpr int MD_DEF_HEADING_SCALE[3] = { 155, 128, 118 };
 
 //! 見出しに使う書体（入っていなければ本文と同じ書体に落とす）
 /*!
@@ -110,6 +110,48 @@ constexpr int MD_DEF_CHAR_SPACING = 0;
 	   「広がりすぎてキモい」と却下された（2026-09-07）。0 のままにしておくこと。
 */
 constexpr int MD_DEF_HEADING_NARROW = 1;
+
+//! 見出しの段ごとに、字を横へ何倍に広げるか（**分子。分母は 2**）
+/*!
+	🔥🔥 **これが「見出しを大きくしても潰れない」ための仕掛け。**（2026-09-08）
+
+	サクラは1文字を升目に置く。全角1字＝升目2つ（半角2つぶん）が既定。
+	背だけ伸ばすと横が足りず潰れる（横の潰れ ≒ 1 ÷ 倍率）ので、
+	**見出しの1字に升目を多く使わせて、横も一緒に広げる。**
+
+	| 値 | 全角1字が使う升目 | 実質の横倍率 | 釣り合う高さ |
+	|---|---|---|---|
+	| 2 | 2つ（既定） | 1.0倍 | 100〜130% |
+	| 3 | 3つ | 1.5倍 | **約155%** |
+	| 4 | 4つ | 2.0倍 | 約210% |
+
+	⚠ **升目は整数個しか使えない**ので、刻めるのは 0.5倍きざみだけ。
+	⚠ **高さ（MD_DEF_HEADING_SCALE）と釣り合わせること。** ずれると今度は横に伸びて見える。
+	⚠ 広げると**その行に入る文字数は減る**（折り返しが早くなる）。
+	⚠ 半角文字は「1つ→2つ」と切り上がる（1.5個の升目は作れない）ので、
+	   見出しの中の英数字は少しゆったり並ぶ。日本語の見出しでは気にならない。
+*/
+constexpr int MD_HEADING_WIDTH_NUM[3] = { 3, 2, 2 };
+
+//! 見出しの行の桁数（半角換算）を、上の倍率で広げる
+/*!
+	🔥 **桁を数える所は全部これを通すこと。** 通し忘れた所ができると、
+	   「字は動いたのにカーソルは元の場所」になる（2026-09-07 に半日溶かした型のバグ）。
+	   通す先＝CMemoryIterator::scanNext / CLayoutMgr::GetLayoutXOfChar /
+	          CTextDrawer::DispText / CFigure_Text::FowardChars の4か所。
+*/
+inline int MdWidenColumns( int nCols, int nLevel )
+{
+	if( nLevel < 1 || 3 < nLevel || nCols <= 0 ){
+		return nCols;
+	}
+	const int nNum = MD_HEADING_WIDTH_NUM[nLevel - 1];
+	if( 2 == nNum ){
+		return nCols;		// 広げない（今までどおり）
+	}
+	return ( nCols * nNum + 1 ) / 2;	// 半端は切り上げ
+}
+
 
 //! 拡張子が Markdown か
 inline bool IsMarkdownPath( const WCHAR* pszPath )
@@ -518,6 +560,18 @@ inline int MdHiddenEndAt( const wchar_t* pLine, int nLen, int i )
 		break;								// 中の文字＝隠さない
 	}
 	return i;
+}
+
+//! 行が見出しならその段（1〜3）、違えば 0（【自前改造】）
+/*!
+	🔥 **必ず「行の先頭」から渡すこと。** 途中を指すポインタだと行頭判定を誤る。
+	折り返した行でも、判定に使うのは**論理行の先頭**（見出しは行ごとの性質なので、
+	折り返した2行目以降も同じ幅で数えないと桁がずれる）。
+*/
+inline int MdHeadingLevelOf( const wchar_t* pLine, int nLen )
+{
+	int nLevel = 0;
+	return MdParseHeading( pLine, nLen, &nLevel, nullptr ) ? nLevel : 0;
 }
 
 #endif /* SAKURA_MARKDOWN_H_ */

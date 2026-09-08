@@ -1304,7 +1304,11 @@ bool CEditView::MakeHeadingLogfont( int nLevel, LOGFONT* pOut ) const
 	// 🔥 そこから設定の m_nHeadingNarrow だけ細くする＝**見出しだけ字間が空く**。
 	//    文字の置き場所は本文フォントの幅から作られていて見出しフォントでは変わらないので、
 	//    細くしてもカーソル・クリック位置は1ミリも動かない（詳しくは markdown.h）。
-	lfHead.lfWidth  = GetTextMetrics().GetHankakuWidth() - MdCfg().m_nHeadingNarrow;
+	// 🔥【自前改造】見出しは升目を多く使うので、字もそのぶん横に広く描く。
+	//    ⚠ MD_HEADING_WIDTH_NUM と**必ず同じ値**で計算すること。
+	//       ここだけずれると、字がはみ出す（広すぎ）か、すき間が空く（狭すぎ）。
+	const int nWidthNum = ( 1 <= nLevel && nLevel <= 3 ) ? MD_HEADING_WIDTH_NUM[nLevel - 1] : 2;
+	lfHead.lfWidth  = ( GetTextMetrics().GetHankakuWidth() * nWidthNum ) / 2 - MdCfg().m_nHeadingNarrow;
 	if( lfHead.lfWidth < 1 ){
 		lfHead.lfWidth = 1;
 	}
