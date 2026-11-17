@@ -1,3 +1,5 @@
+> 💤 **休眠中（2026-11-17〜）。** 直さない・配信しない。決まりと戻し方は同じフォルダの `休眠中.md`。
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
